@@ -1,0 +1,28 @@
+# Binários e arquivos de compilação
+*.dcu
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.dres
+*.rsm
+*.map
+*.o
+*.obj
+
+# Histórico e configurações locais (NUNCA envie estes)
+__history/
+*.identcache
+*.local
+*.stat
+*.tvsconfig
+*.skincfg
+*.projstack
+
+# Pastas de saída (Builds)
+Win32/
+Win64/
+Android/
+iOS/
+Debug/
+Release/
