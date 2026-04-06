@@ -2,17 +2,17 @@ program Pokedex;
 
 uses
   Vcl.Forms,
-  Pokedex.View.Main in 'Pokedex.View.Main.pas' {PokedexView},
-  Pokedex.Service.API in 'Pokedex.Service.API.pas' {DataModule1: TDataModule},
-  Pokedex.Controller.Pokemon in 'Pokedex.Controller.Pokemon.pas',
-  Pokedex.Model.Pokemon in 'src\Model\Pokedex.Model.Pokemon.pas';
+  Pokedex.Model.Pokemon in 'src\Model\Pokedex.Model.Pokemon.pas',
+  Pokedex.Controller.Pokemon in 'src\Controller\Pokedex.Controller.Pokemon.pas',
+  Pokedex.Service.API in 'src\Service\Pokedex.Service.API.pas' {dmPokeService: TDataModule},
+  Pokedex.View.Main in 'src\View\Pokedex.View.Main.pas' {PokedexView};
 
 {$R *.res}
 
 begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
+  Application.CreateForm(TdmPokeService, dmPokeService);
   Application.CreateForm(TPokedexView, PokedexView);
-  Application.CreateForm(TDataModule1, DataModule1);
   Application.Run;
 end.

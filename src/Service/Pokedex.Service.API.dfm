@@ -1,24 +1,24 @@
-object DataModule1: TDataModule1
+object dmPokeService: TdmPokeService
   Height = 480
   Width = 640
   object RESTClientPoke: TRESTClient
-    BaseURL = 'https://pokeapi.co/api/v2/pokemon/1'
+    BaseURL = 'https://pokeapi.co/api/v2'
     Params = <>
     SynchronizedEvents = False
-    Left = 32
+    Left = 48
     Top = 16
   end
-  object ReqPokemon: TRESTRequest
+  object ReqPokemonById: TRESTRequest
     AssignedValues = [rvConnectTimeout, rvReadTimeout]
     Client = RESTClientPoke
     Params = <>
-    Response = ResPokemon
+    Response = ResPokemonJSON
     SynchronizedEvents = False
-    Left = 32
+    Left = 48
     Top = 72
   end
-  object ResPokemon: TRESTResponse
-    Left = 32
+  object ResPokemonJSON: TRESTResponse
+    Left = 48
     Top = 128
   end
 end

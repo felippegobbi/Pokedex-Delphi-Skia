@@ -3,27 +3,43 @@ unit Pokedex.Service.API;
 interface
 
 uses
-  System.SysUtils, System.Classes, REST.Types, REST.Client,
-  Data.Bind.Components, Data.Bind.ObjectScope;
+  System.SysUtils,
+  System.Classes,
+  REST.Types,
+  REST.Client,
+  Data.Bind.Components,
+  Data.Bind.ObjectScope;
 
 type
-  TDataModule1 = class(TDataModule)
+  TdmPokeService = class(TDataModule)
     RESTClientPoke: TRESTClient;
-    ReqPokemon: TRESTRequest;
-    ResPokemon: TRESTResponse;
-  private
-    { Private declarations }
+    ReqPokemonById: TRESTRequest;
+    ResPokemonJSON: TRESTResponse;
   public
-    { Public declarations }
+    function GetPokemonJSON(const AIdOrName: string): string;
   end;
 
 var
-  DataModule1: TDataModule1;
+  dmPokeService: TdmPokeService;
 
 implementation
 
 {%CLASSGROUP 'Vcl.Controls.TControl'}
-
 {$R *.dfm}
+
+function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
+begin
+  Result := '';
+  try
+    ReqPokemonById.Resource := 'pokemon/' + LowerCase(Trim(AIdOrName));
+    ReqPokemonById.Execute;
+
+    if ResPokemonJSON.StatusCode = 200 then
+      Result := ResPokemonJSON.Content;
+  except
+    // Se der 404 ou erro de rede, retorna vazio para o Controller tratar
+    Result := '';
+  end;
+end;
 
 end.

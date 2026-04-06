@@ -104,6 +104,12 @@
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
+        <DCC_UnitSearchPath>.\src\View;.\src\Model;.\src\Service;.\src\Controller;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <Icon_MainIcon>Pokedex_Icon.ico</Icon_MainIcon>
+        <UWP_DelphiLogo44>assets\Pokedex_Icon.png</UWP_DelphiLogo44>
+        <UWP_DelphiLogo150>assets\Pokedex_Icon.png</UWP_DelphiLogo150>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
@@ -124,17 +130,17 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="Pokedex.View.Main.pas">
-            <Form>PokedexView</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
-        <DCCReference Include="Pokedex.Service.API.pas">
-            <Form>DataModule1</Form>
+        <DCCReference Include="src\Model\Pokedex.Model.Pokemon.pas"/>
+        <DCCReference Include="src\Controller\Pokedex.Controller.Pokemon.pas"/>
+        <DCCReference Include="src\Service\Pokedex.Service.API.pas">
+            <Form>dmPokeService</Form>
             <FormType>dfm</FormType>
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
-        <DCCReference Include="Pokedex.Controller.Pokemon.pas"/>
-        <DCCReference Include="src\Model\Pokedex.Model.Pokemon.pas"/>
+        <DCCReference Include="src\View\Pokedex.View.Main.pas">
+            <Form>PokedexView</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -155,6 +161,10 @@
                 <Source>
                     <Source Name="MainSource">Pokedex.dpr</Source>
                 </Source>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k290.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp290.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
+                </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="4">
                 <DeployFile Condition="'$(SKIADIR)'==''" Required="true" LocalName="$(BDS)\bin64\sk4d.dll" Configuration="Debug" Class="Skia">
@@ -224,6 +234,13 @@
                 <DeployFile LocalName="Win32\Debug\Pokedex.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>Pokedex.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="assets\Pokedex_Icon.png" Configuration="Debug" Class="UWP_DelphiLogo44">
+                    <Platform Name="Win32">
+                        <RemoteDir>Assets\</RemoteDir>
+                        <RemoteName>Logo44x44.png</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

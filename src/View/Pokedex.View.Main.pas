@@ -3,10 +3,24 @@ unit Pokedex.View.Main;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, REST.Types, REST.Client,
-  Data.Bind.Components, Data.Bind.ObjectScope, Vcl.ExtCtrls, Vcl.StdCtrls,
-  System.Skia, Vcl.Skia;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  REST.Types,
+  REST.Client,
+  Data.Bind.Components,
+  Data.Bind.ObjectScope,
+  Vcl.ExtCtrls,
+  Vcl.StdCtrls,
+  System.Skia,
+  Vcl.Skia,
+  Vcl.WinXCtrls;
 
 type
   TPokedexView = class(TForm)
@@ -15,8 +29,13 @@ type
     btnSearchAction: TButton;
     pnlImage: TPanel;
     lblDisplayName: TLabel;
-    memDebugLog: TMemo;
-    imgPokemonDisplay: TSkAnimatedImage;
+    skImgPokemon: TSkAnimatedImage;
+    pnlInfo: TRelativePanel;
+    lblAbility: TLabel;
+    lblType: TLabel;
+    lblWeight: TLabel;
+    lblHeight: TLabel;
+    procedure btnSearchActionClick(Sender: TObject);
   private
     { Private declarations }
   public
@@ -30,6 +49,78 @@ implementation
 
 {$R *.dfm}
 
-uses Pokedex.Service.API;
+uses
+  Pokedex.Service.API,
+  Pokedex.Controller.Pokemon,
+  Pokedex.Model.Pokemon;
+
+procedure TPokedexView.btnSearchActionClick(Sender: TObject);
+var
+  LPokemon: TPokemon;
+  LStream: TMemoryStream;
+  LTypeStr: string;
+  I: Integer;
+begin
+  if Trim(edtSearchInput.Text).IsEmpty then
+  begin
+    MessageDlg('Por favor, informe o nome ou ID do Pokémon desejado.',
+      mtWarning, [mbOK], 0);
+
+    edtSearchInput.SetFocus;
+    Exit;
+  end;
+
+  LPokemon := TPokemonController.ExecuteGetPokemon(edtSearchInput.Text);
+  try
+    if not Assigned(LPokemon) then
+    begin
+      MessageDlg('Pokémon não encontrado. Verifique o nome ou ID.', mtError,
+        [mbOK], 0);
+      Exit;
+    end;
+
+    lblDisplayName.Caption := UpperCase(LPokemon.Name);
+    LStream := TPokemonController.DownloadImage(LPokemon.Sprites.FrontDefault);
+    try
+      if Assigned(LStream) then
+        skImgPokemon.LoadFromStream(LStream)
+      else
+        MessageDlg('Dados carregados, mas não foi possível baixar a imagem.',
+          mtWarning, [mbOK], 0);
+    finally
+      LStream.Free;
+    end;
+
+    lblWeight.Caption := 'Peso Médio: ' + TPokemonController.FormatMetric
+      (LPokemon.Weight, 'kg');
+
+    lblHeight.Caption := 'Altura Média: ' + TPokemonController.FormatMetric
+      (LPokemon.Height, 'm');
+
+    if length(LPokemon.Abilities) > 0 then
+    begin
+      lblAbility.Caption := 'Habilidade: ' +
+        UpperCase(LPokemon.Abilities[0].Ability.Name);
+    end;
+
+    if length(LPokemon.Types) > 0 then
+    begin
+      LTypeStr := '';
+      for I := 0 to length(LPokemon.Types) - 1 do
+      begin
+        if LTypeStr <> '' then
+          LTypeStr := LTypeStr + ' / ';
+
+        LTypeStr := LTypeStr + UpperCase(LPokemon.Types[I].&Type.Name);
+      end;
+      lblType.Caption := 'Tipo: ' + LTypeStr;
+    end
+    else
+      lblType.Caption := 'Tipo: DESCONHECIDO';
+
+  finally
+    LPokemon.Free;
+  end;
+end;
 
 end.
