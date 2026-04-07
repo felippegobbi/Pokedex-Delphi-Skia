@@ -9,7 +9,8 @@ uses
   System.SysUtils,
   System.Classes,
   System.UITypes,
-  VCL.Graphics;
+  VCL.Graphics,
+  System.Generics.Collections;
 
 type
   TPokemonController = class
@@ -19,13 +20,15 @@ type
     class function FormatMetric(const AValue: Integer;
       const AUnit: string): string;
     class function GetColorByString(const AColorName: string): TColor;
+    class procedure FillAutoCompleteList(AList: TStrings);
   end;
 
 implementation
 
 uses
   System.Net.HttpClient,
-  System.Net.HttpClientComponent;
+  System.Net.HttpClientComponent,
+  System.Json;
 
 class function TPokemonController.DownloadImage(const AUrl: string)
   : TMemoryStream;
@@ -78,6 +81,41 @@ begin
   end;
 end;
 
+class procedure TPokemonController.FillAutoCompleteList(AList: TStrings);
+var
+  LContent: string;
+  LJSONObject, LItem: TJsonObject;
+  LResults: TJSONArray;
+  I: Integer;
+begin
+  LContent := dmPokeService.GetAllPokemonName;
+
+  if LContent.IsEmpty then
+    exit;
+
+  LJSONObject := TJSONObject.ParseJSONValue(LContent) as TJSONObject;
+
+  try
+    if Assigned(LJSONObject) then
+    begin
+      LResults := LJSONObject.GetValue<TJSONArray>('results');
+      AList.BeginUpdate;
+      try
+        AList.Clear;
+        for I := 0 to LResults.Count - 1 do
+        begin
+          LItem := LResults.Items[I] as TJSONObject;
+          AList.Add(LItem.GetValue<string>('name'));
+        end;
+      finally
+        AList.EndUpdate;
+      end;
+    end;
+  finally
+    LJSONObject.Free;
+  end;
+end;
+
 class function TPokemonController.FormatMetric(const AValue: Integer;
   const AUnit: string): string;
 begin
@@ -88,25 +126,25 @@ class function TPokemonController.GetColorByString(const AColorName
   : string): TColor;
 begin
   if AColorName = 'black' then
-    Exit($002C2C2C);
+    exit($002C2C2C);
   if AColorName = 'blue' then
-    Exit($00F09068);
+    exit($00F09068);
   if AColorName = 'brown' then
-    Exit($005090A8);
+    exit($005090A8);
   if AColorName = 'gray' then
-    Exit($00A8A8A8);
+    exit($00A8A8A8);
   if AColorName = 'green' then
-    Exit($0078C850);
+    exit($0078C850);
   if AColorName = 'pink' then
-    Exit($00B8A0F8);
+    exit($00B8A0F8);
   if AColorName = 'purple' then
-    Exit($00A04070);
+    exit($00A04070);
   if AColorName = 'red' then
-    Exit($005050F0);
+    exit($005050F0);
   if AColorName = 'white' then
-    Exit(clWhite);
+    exit(clWhite);
   if AColorName = 'yellow' then
-    Exit($0030D0F8);
+    exit($0030D0F8);
 
   Result := clBtnFace;
 end;

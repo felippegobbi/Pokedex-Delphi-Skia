@@ -26,7 +26,7 @@ uses
 type
   TPokedexView = class(TForm)
     pnlTopContainer: TPanel;
-    edtSearchInput: TEdit;
+    cbSearchInput: TComboBox;
     btnSearchAction: TButton;
     pnlImage: TPanel;
     lblDisplayName: TLabel;
@@ -38,7 +38,10 @@ type
     lblHeight: TLabel;
     mmDescription: TMemo;
     procedure btnSearchActionClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
   private
+    FPokemonList: TStringList;
     procedure ApplyTheme(const AColor: TColor);
   public
     { Public declarations }
@@ -54,7 +57,10 @@ implementation
 uses
   Pokedex.Service.API,
   Pokedex.Controller.Pokemon,
-  Pokedex.Model.Pokemon;
+  Pokedex.Model.Pokemon,
+  Winapi.ShlObj,
+  Winapi.ActiveX,
+  System.Win.ComObj;
 
 procedure TPokedexView.ApplyTheme(const AColor: TColor);
 begin
@@ -75,17 +81,17 @@ var
   LTypeStr: string;
   I: Integer;
 begin
-  if Trim(edtSearchInput.Text).IsEmpty then
+  if Trim(cbSearchInput.Text).IsEmpty then
   begin
     MessageDlg('Por favor, informe o nome ou ID do Pokémon desejado.',
       mtWarning, [mbOK], 0);
 
-    edtSearchInput.SetFocus;
+    cbSearchInput.SetFocus;
     Exit;
   end;
 
-  LPokemon := TPokemonController.ExecuteGetPokemon(edtSearchInput.Text);
-  lblDisplayName.Caption := UpperCase(LPokemon.Name);
+  LPokemon := TPokemonController.ExecuteGetPokemon(cbSearchInput.Text);
+
   try
     if not Assigned(LPokemon) then
     begin
@@ -102,6 +108,7 @@ begin
 
     lblDisplayName.Caption := UpperCase(LPokemon.Name);
     LStream := TPokemonController.DownloadImage(LPokemon.Sprites.FrontDefault);
+
     try
       if Assigned(LStream) then
         skImgPokemon.LoadFromStream(LStream)
@@ -149,6 +156,20 @@ begin
   finally
     LPokemon.Free;
   end;
+end;
+
+procedure TPokedexView.FormCreate(Sender: TObject);
+begin
+  FPokemonList := TStringList.Create;
+  TPokemonController.FillAutoCompleteList(FPokemonList);
+
+  cbSearchInput.Items.Assign(FPokemonList);
+  cbSearchInput.Sorted := True;
+end;
+
+procedure TPokedexView.FormDestroy(Sender: TObject);
+begin
+  FPokemonList.Free;
 end;
 
 end.

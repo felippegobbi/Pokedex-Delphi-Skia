@@ -18,6 +18,7 @@ type
   public
     function GetPokemonJSON(const AIdOrName: string): string;
     function GetSpeciesJSON(const AUrl: string): string;
+    function GetAllPokemonName: string;
   end;
 
 var
@@ -27,6 +28,22 @@ implementation
 
 {%CLASSGROUP 'Vcl.Controls.TControl'}
 {$R *.dfm}
+
+function TdmPokeService.GetAllPokemonName: string;
+begin
+  Result := '';
+
+  try
+    RESTClientPoke.BaseURL :=  'https://pokeapi.co/api/v2';
+    ReqPokemonById.Resource := 'pokemon?limit=2000';
+    ReqPokemonById.Execute;
+
+    if ResPokemonJSON.StatusCode = 200 then
+      Result := ResPokemonJSON.Content;
+  except
+    Result := '';
+  end;
+end;
 
 function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
 begin
