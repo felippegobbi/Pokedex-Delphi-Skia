@@ -12,8 +12,11 @@ type
   private
     [JSONName('name')]
     FName: string;
+    [JSONName('url')]
+    FUrl: string;
   public
     property Name: string read FName write FName;
+    property Url: string read FUrl write FUrl;
   end;
 
   TAbility = class
@@ -52,33 +55,27 @@ type
     property FrontDefault: string read FFrontDefault write FFrontDefault;
   end;
 
-  TPokemon = class
+  TStatInfo = class
   private
-    [JSONName('id')]
-    FId: Integer;
     [JSONName('name')]
     FName: string;
-    [JSONName('weight')]
-    FWeight: Integer;
-    [JSONName('height')]
-    FHeight: Integer;
-    [JSONName('sprites')]
-    FSprites: TSprites;
-    [JSONName('abilities')]
-    FAbilities: TArray<TAbility>;
-    [JSONName('types')]
-    FTypes: TArray<TPokemonType>;
+    [JSONName('url')]
+    FUrl: string;
   public
-    property Id: Integer read FId write FId;
     property Name: string read FName write FName;
-    property Weight: Integer read FWeight write FWeight;
-    property Height: Integer read FHeight write FHeight;
-    property Sprites: TSprites read FSprites write FSprites;
-    property Abilities: TArray<TAbility> read FAbilities write FAbilities;
-    property Types: TArray<TPokemonType> read FTypes write FTypes;
+    property Url: string read FUrl write FUrl;
+  end;
 
-    constructor Create;
+  TStatEntry = class
+  private
+    [JSONName('base_stat')]
+    FBaseStat: Integer;
+    [JSONName('stat')]
+    FStat: TStatInfo;
+  public
     destructor Destroy; override;
+    property BaseStat: Integer read FBaseStat write FBaseStat;
+    property Stat: TStatInfo read FStat write FStat;
   end;
 
   TFlavorText = class
@@ -110,6 +107,42 @@ type
     function GetDescription: string;
   end;
 
+  TPokemon = class
+  private
+    [JSONName('id')]
+    FId: Integer;
+    [JSONName('name')]
+    FName: string;
+    [JSONName('weight')]
+    FWeight: Integer;
+    [JSONName('height')]
+    FHeight: Integer;
+    [JSONName('sprites')]
+    FSprites: TSprites;
+    [JSONName('abilities')]
+    FAbilities: TArray<TAbility>;
+    [JSONName('types')]
+    FTypes: TArray<TPokemonType>;
+    [JSONName('species')]
+    FSpecies: TAbilityInfo;
+    [JSONName('stats')]
+    FStats: TArray<TStatEntry>;
+    FSpeciesData: TPokemonSpecies;
+  public
+    property Id: Integer read FId write FId;
+    property Name: string read FName write FName;
+    property Weight: Integer read FWeight write FWeight;
+    property Height: Integer read FHeight write FHeight;
+    property Sprites: TSprites read FSprites write FSprites;
+    property Abilities: TArray<TAbility> read FAbilities write FAbilities;
+    property Types: TArray<TPokemonType> read FTypes write FTypes;
+    property Species: TAbilityInfo read FSpecies write FSpecies;
+    property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
+
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
 implementation
 
 { TPokemon }
@@ -121,12 +154,21 @@ end;
 destructor TPokemon.Destroy;
 var
   I: Integer;
+  LStat: TStatEntry;
 begin
   FSprites.Free;
+  FSpecies.Free;
+  FSpeciesData.Free;
+
   for I := 0 to Length(FAbilities) - 1 do
     FAbilities[I].Free;
+
   for I := 0 to Length(FTypes) - 1 do
     FTypes[I].Free;
+
+  for LStat in FStats do
+    LStat.Free;
+
   inherited;
 end;
 
@@ -180,6 +222,16 @@ begin
     Result := LBackupEn;
 
   Result := Result.Replace(#10, ' ').Replace(#12, ' ').Replace(#13, ' ');
+end;
+
+{ TStatEntry }
+
+destructor TStatEntry.Destroy;
+begin
+  if Assigned(FStat) then
+    FStat.Free;
+
+  inherited;
 end;
 
 end.

@@ -47,7 +47,7 @@ end;
 class function TPokemonController.ExecuteGetPokemon(const AIdOrName: string)
   : TPokemon;
 var
-  LContent: string;
+  LContent, LSpeciesContent: string;
 begin
   Result := nil;
   try
@@ -55,16 +55,23 @@ begin
 
     if (not LContent.IsEmpty) and (LContent.StartsWith('{')) then
     begin
-      try
-        Result := TJson.JsonToObject<TPokemon>(LContent);
-      except
-        Result := nil;
+      Result := TJson.JsonToObject<TPokemon>(LContent);
+
+      // Cascata: Se temos o Pokémon, buscamos a espécie para a descrição
+      if Assigned(Result) and Assigned(Result.Species) then
+      begin
+        LSpeciesContent := dmPokeService.GetSpeciesJSON(Result.Species.Url);
+        if not LSpeciesContent.IsEmpty then
+          Result.SpeciesData := TJson.JsonToObject<TPokemonSpecies>
+            (LSpeciesContent);
       end;
     end;
-
   except
     on E: Exception do
-      Result := nil;
+    begin
+      if Assigned(Result) then
+        FreeAndNil(Result);
+    end;
   end;
 end;
 

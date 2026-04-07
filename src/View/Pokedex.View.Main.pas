@@ -120,6 +120,13 @@ begin
     else
       lblType.Caption := 'Tipo: DESCONHECIDO';
 
+    mmDescription.Lines.Clear;
+
+    if Assigned(LPokemon.SpeciesData) then
+      mmDescription.Text := LPokemon.SpeciesData.GetDescription
+    else
+      mmDescription.Text := 'Descrição não disponível para esse Pokémon.';
+
   finally
     LPokemon.Free;
   end;

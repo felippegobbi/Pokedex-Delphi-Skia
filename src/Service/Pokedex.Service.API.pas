@@ -31,6 +31,8 @@ implementation
 function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
 begin
   Result := '';
+  RESTClientPoke.BaseURL := 'https://pokeapi.co/api/v2';
+  
   try
     ReqPokemonById.Resource := 'pokemon/' + LowerCase(Trim(AIdOrName));
     ReqPokemonById.Execute;
