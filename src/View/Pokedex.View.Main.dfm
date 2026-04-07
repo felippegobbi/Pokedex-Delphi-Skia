@@ -65,10 +65,26 @@ object PokedexView: TPokedexView
       Left = 1
       Top = 38
       Width = 339
-      Height = 336
+      Height = 202
       Align = alClient
-      ExplicitTop = 1
-      ExplicitHeight = 352
+      ExplicitHeight = 336
+    end
+    object mmDescription: TMemo
+      Left = 1
+      Top = 240
+      Width = 339
+      Height = 134
+      Align = alBottom
+      Color = clWindowFrame
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clYellowgreen
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+      ReadOnly = True
+      TabOrder = 1
+      ExplicitTop = 241
     end
   end
   object pnlInfo: TRelativePanel

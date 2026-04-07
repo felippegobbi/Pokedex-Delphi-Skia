@@ -20,7 +20,8 @@ uses
   Vcl.StdCtrls,
   System.Skia,
   Vcl.Skia,
-  Vcl.WinXCtrls;
+  Vcl.WinXCtrls,
+  System.UITypes;
 
 type
   TPokedexView = class(TForm)
@@ -35,6 +36,7 @@ type
     lblType: TLabel;
     lblWeight: TLabel;
     lblHeight: TLabel;
+    mmDescription: TMemo;
     procedure btnSearchActionClick(Sender: TObject);
   private
     { Private declarations }

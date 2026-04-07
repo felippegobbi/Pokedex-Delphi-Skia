@@ -50,6 +50,7 @@ begin
   try
     RESTClientPoke.BaseURL := AUrl;
     ReqPokemonById.Resource := '';
+    ReqPokemonById.Params.Clear;
     ReqPokemonById.Execute;
 
     if ResPokemonJSON.StatusCode = 200 then
