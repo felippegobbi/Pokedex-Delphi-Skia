@@ -4,7 +4,8 @@ interface
 
 uses
   System.Generics.Collections,
-  Rest.Json.Types;
+  Rest.Json.Types,
+  System.SysUtils;
 
 type
   TAbilityInfo = class
@@ -80,6 +81,35 @@ type
     destructor Destroy; override;
   end;
 
+  TFlavorText = class
+  private
+    [JSONName('flavor_text')]
+    FText: string;
+    [JSONName('language')]
+    FLanguage: TAbilityInfo;
+  public
+    property Text: string read FText write FText;
+    property Language: TAbilityInfo read FLanguage write FLanguage;
+  end;
+
+  TPokemonSpecies = class
+  private
+    [JSONName('flavor_text_entries')]
+    FFlavorEntries: TArray<TFlavorText>;
+    [JSONName('evolution_chain')]
+    FEvolutionChain: TAbilityInfo;
+    [JSONName('color')]
+    FColor: TAbilityInfo;
+  public
+    property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
+      write FFlavorEntries;
+    property EvolutionChain: TAbilityInfo read FEvolutionChain
+      write FEvolutionChain;
+    property Color: TAbilityInfo read FColor write FColor;
+
+    function GetDescription: string;
+  end;
+
 implementation
 
 { TPokemon }
@@ -122,6 +152,34 @@ destructor TPokemonType.Destroy;
 begin
   FType.Free;
   inherited;
+end;
+
+{ TPokemonSpecies }
+
+function TPokemonSpecies.GetDescription: string;
+var
+  LEntry: TFlavorText;
+  LBackupEn: string;
+begin
+  Result := '';
+  LBackupEn := '';
+
+  for LEntry in FFlavorEntries do
+  begin
+    if (LEntry.Language.Name = 'pt-BR') or (LEntry.Language.Name = 'pt') then
+    begin
+      Result := LEntry.Text;
+      Break;
+    end;
+
+    if LEntry.Language.Name = 'en' then
+      LBackupEn := LEntry.Text;
+  end;
+
+  if Result = '' then
+    Result := LBackupEn;
+
+  Result := Result.Replace(#10, ' ').Replace(#12, ' ').Replace(#13, ' ');
 end;
 
 end.

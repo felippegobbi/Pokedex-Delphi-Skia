@@ -17,6 +17,7 @@ type
     ResPokemonJSON: TRESTResponse;
   public
     function GetPokemonJSON(const AIdOrName: string): string;
+    function GetSpeciesJSON(const AUrl: string): string;
   end;
 
 var
@@ -38,6 +39,22 @@ begin
       Result := ResPokemonJSON.Content;
   except
     // Se der 404 ou erro de rede, retorna vazio para o Controller tratar
+    Result := '';
+  end;
+end;
+
+function TdmPokeService.GetSpeciesJSON(const AUrl: string): string;
+begin
+  Result := '';
+
+  try
+    RESTClientPoke.BaseURL := AUrl;
+    ReqPokemonById.Resource := '';
+    ReqPokemonById.Execute;
+
+    if ResPokemonJSON.StatusCode = 200 then
+      Result := ResPokemonJSON.Content;
+  except
     Result := '';
   end;
 end;

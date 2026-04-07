@@ -20,7 +20,6 @@ object PokedexView: TPokedexView
     Height = 41
     Align = alTop
     TabOrder = 0
-    ExplicitWidth = 656
     object edtSearchInput: TEdit
       Left = 8
       Top = 10
@@ -46,29 +45,30 @@ object PokedexView: TPokedexView
     Height = 375
     Align = alClient
     TabOrder = 1
-    ExplicitWidth = 656
     object lblDisplayName: TLabel
-      Left = 1
-      Top = 353
-      Width = 339
-      Height = 21
-      Align = alBottom
-      Caption = 'Nome do Pok'#233'mon'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -16
-      Font.Name = 'Segoe UI'
-      Font.Style = []
-      ParentFont = False
-      ExplicitWidth = 134
-    end
-    object skImgPokemon: TSkAnimatedImage
       Left = 1
       Top = 1
       Width = 339
-      Height = 352
+      Height = 37
+      Align = alTop
+      Alignment = taCenter
+      Caption = 'Nome do Pok'#233'mon'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -27
+      Font.Name = 'Segoe UI'
+      Font.Style = [fsBold]
+      ParentFont = False
+      ExplicitWidth = 247
+    end
+    object skImgPokemon: TSkAnimatedImage
+      Left = 1
+      Top = 38
+      Width = 339
+      Height = 336
       Align = alClient
-      ExplicitWidth = 654
+      ExplicitTop = 1
+      ExplicitHeight = 352
     end
   end
   object pnlInfo: TRelativePanel
@@ -115,7 +115,6 @@ object PokedexView: TPokedexView
       end>
     Align = alBottom
     TabOrder = 2
-    ExplicitWidth = 656
     DesignSize = (
       341
       95)
