@@ -19,6 +19,7 @@ object PokedexView: TPokedexView
     Width = 341
     Height = 41
     Align = alTop
+    ParentBackground = False
     TabOrder = 0
     object edtSearchInput: TEdit
       Left = 8
@@ -44,6 +45,7 @@ object PokedexView: TPokedexView
     Width = 341
     Height = 375
     Align = alClient
+    ParentBackground = False
     TabOrder = 1
     object lblDisplayName: TLabel
       Left = 1
@@ -65,26 +67,25 @@ object PokedexView: TPokedexView
       Left = 1
       Top = 38
       Width = 339
-      Height = 202
+      Height = 258
       Align = alClient
       ExplicitHeight = 336
     end
     object mmDescription: TMemo
       Left = 1
-      Top = 240
+      Top = 296
       Width = 339
-      Height = 134
+      Height = 78
       Align = alBottom
       Color = clWindowFrame
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clYellowgreen
       Font.Height = -12
       Font.Name = 'Segoe UI'
-      Font.Style = []
+      Font.Style = [fsBold]
       ParentFont = False
       ReadOnly = True
       TabOrder = 1
-      ExplicitTop = 241
     end
   end
   object pnlInfo: TRelativePanel
@@ -130,6 +131,7 @@ object PokedexView: TPokedexView
         AlignVerticalCenterWithPanel = False
       end>
     Align = alBottom
+    ParentBackground = False
     TabOrder = 2
     DesignSize = (
       341

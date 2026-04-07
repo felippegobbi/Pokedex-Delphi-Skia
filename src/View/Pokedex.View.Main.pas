@@ -39,7 +39,7 @@ type
     mmDescription: TMemo;
     procedure btnSearchActionClick(Sender: TObject);
   private
-    { Private declarations }
+    procedure ApplyTheme(const AColor: TColor);
   public
     { Public declarations }
   end;
@@ -55,6 +55,18 @@ uses
   Pokedex.Service.API,
   Pokedex.Controller.Pokemon,
   Pokedex.Model.Pokemon;
+
+procedure TPokedexView.ApplyTheme(const AColor: TColor);
+begin
+  pnlImage.Color := AColor;
+  pnlTopContainer.Color := AColor;
+  pnlInfo.Color := AColor;
+
+  if AColor = $002C2C2C then
+    lblDisplayName.Font.Color := clWhite
+  else
+    lblDisplayName.Font.Color := clBlack;
+end;
 
 procedure TPokedexView.btnSearchActionClick(Sender: TObject);
 var
@@ -73,12 +85,19 @@ begin
   end;
 
   LPokemon := TPokemonController.ExecuteGetPokemon(edtSearchInput.Text);
+  lblDisplayName.Caption := UpperCase(LPokemon.Name);
   try
     if not Assigned(LPokemon) then
     begin
       MessageDlg('Pokémon não encontrado. Verifique o nome ou ID.', mtError,
         [mbOK], 0);
       Exit;
+    end;
+
+    if Assigned(LPokemon.SpeciesData) then
+    begin
+      ApplyTheme(TPokemonController.GetColorByString
+        (LPokemon.SpeciesData.Color.Name));
     end;
 
     lblDisplayName.Caption := UpperCase(LPokemon.Name);

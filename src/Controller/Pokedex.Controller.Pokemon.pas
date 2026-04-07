@@ -7,7 +7,9 @@ uses
   Pokedex.Service.API,
   REST.Json,
   System.SysUtils,
-  System.Classes;
+  System.Classes,
+  System.UITypes,
+  VCL.Graphics;
 
 type
   TPokemonController = class
@@ -16,6 +18,7 @@ type
     class function DownloadImage(const AUrl: string): TMemoryStream;
     class function FormatMetric(const AValue: Integer;
       const AUnit: string): string;
+    class function GetColorByString(const AColorName: string): TColor;
   end;
 
 implementation
@@ -79,6 +82,33 @@ class function TPokemonController.FormatMetric(const AValue: Integer;
   const AUnit: string): string;
 begin
   Result := FormatFloat('0.0', AValue / 10) + ' ' + AUnit;
+end;
+
+class function TPokemonController.GetColorByString(const AColorName
+  : string): TColor;
+begin
+  if AColorName = 'black' then
+    Exit($002C2C2C);
+  if AColorName = 'blue' then
+    Exit($00F09068);
+  if AColorName = 'brown' then
+    Exit($005090A8);
+  if AColorName = 'gray' then
+    Exit($00A8A8A8);
+  if AColorName = 'green' then
+    Exit($0078C850);
+  if AColorName = 'pink' then
+    Exit($00B8A0F8);
+  if AColorName = 'purple' then
+    Exit($00A04070);
+  if AColorName = 'red' then
+    Exit($005050F0);
+  if AColorName = 'white' then
+    Exit(clWhite);
+  if AColorName = 'yellow' then
+    Exit($0030D0F8);
+
+  Result := clBtnFace;
 end;
 
 end.
