@@ -14,6 +14,10 @@ uses
 
 type
   TPokemonController = class
+  private
+    class var FTypeColors: TDictionary<string, TColor>;
+    class var FSpeciesColors: TDictionary<string, TColor>;
+    class procedure InitializeColorMaps;
   public
     class function ExecuteGetPokemon(const AIdOrName: string): TPokemon;
     class function DownloadImage(const AUrl: string): TMemoryStream;
@@ -21,6 +25,9 @@ type
       const AUnit: string): string;
     class function GetColorByString(const AColorName: string): TColor;
     class procedure FillAutoCompleteList(AList: TStrings);
+    class function GetTypeColor(const ATypeName: string): TColor;
+    class constructor Create;
+    class destructor Destroy;
   end;
 
 implementation
@@ -29,6 +36,17 @@ uses
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
   System.Json;
+
+class constructor TPokemonController.Create;
+begin
+  InitializeColorMaps;
+end;
+
+class destructor TPokemonController.Destroy;
+begin
+  FTypeColors.Free;
+  FSpeciesColors.Free;
+end;
 
 class function TPokemonController.DownloadImage(const AUrl: string)
   : TMemoryStream;
@@ -63,7 +81,6 @@ begin
     begin
       Result := TJson.JsonToObject<TPokemon>(LContent);
 
-      // Cascata: Se temos o Pokémon, buscamos a espécie para a descrição
       if Assigned(Result) and Assigned(Result.Species) then
       begin
         LSpeciesContent := dmPokeService.GetSpeciesJSON(Result.Species.Url);
@@ -93,7 +110,7 @@ begin
   if LContent.IsEmpty then
     exit;
 
-  LJSONObject := TJSONObject.ParseJSONValue(LContent) as TJSONObject;
+  LJSONObject := TJsonObject.ParseJSONValue(LContent) as TJsonObject;
 
   try
     if Assigned(LJSONObject) then
@@ -104,7 +121,7 @@ begin
         AList.Clear;
         for I := 0 to LResults.Count - 1 do
         begin
-          LItem := LResults.Items[I] as TJSONObject;
+          LItem := LResults.Items[I] as TJsonObject;
           AList.Add(LItem.GetValue<string>('name'));
         end;
       finally
@@ -125,28 +142,49 @@ end;
 class function TPokemonController.GetColorByString(const AColorName
   : string): TColor;
 begin
-  if AColorName = 'black' then
-    exit($002C2C2C);
-  if AColorName = 'blue' then
-    exit($00F09068);
-  if AColorName = 'brown' then
-    exit($005090A8);
-  if AColorName = 'gray' then
-    exit($00A8A8A8);
-  if AColorName = 'green' then
-    exit($0078C850);
-  if AColorName = 'pink' then
-    exit($00B8A0F8);
-  if AColorName = 'purple' then
-    exit($00A04070);
-  if AColorName = 'red' then
-    exit($005050F0);
-  if AColorName = 'white' then
-    exit(clWhite);
-  if AColorName = 'yellow' then
-    exit($0030D0F8);
+  if not FSpeciesColors.TryGetValue(AColorName.ToLower, Result) then
+    Result := clBtnFace;
+end;
 
-  Result := clBtnFace;
+class function TPokemonController.GetTypeColor(const ATypeName: string): TColor;
+begin
+  if not FTypeColors.TryGetValue(ATypeName.ToLower, Result) then
+    Result := $00A8A8A8;
+end;
+
+class procedure TPokemonController.InitializeColorMaps;
+begin
+  FTypeColors := TDictionary<string, TColor>.Create;
+  FTypeColors.Add('fire', $0044A1F0);
+  FTypeColors.Add('water', $00F09068);
+  FTypeColors.Add('grass', $0071C278);
+  FTypeColors.Add('electric', $0048D0F8);
+  FTypeColors.Add('ice', $00D0F098);
+  FTypeColors.Add('fighting', $003030C0);
+  FTypeColors.Add('poison', $00A040A0);
+  FTypeColors.Add('ground', $005090E0);
+  FTypeColors.Add('flying', $00D090A8);
+  FTypeColors.Add('psychic', $009858F8);
+  FTypeColors.Add('bug', $0020A8A8);
+  FTypeColors.Add('rock', $004088B8);
+  FTypeColors.Add('ghost', $00A06070);
+  FTypeColors.Add('dragon', $00F18A70);
+  FTypeColors.Add('dark', $004F7070);
+  FTypeColors.Add('steel', $00D1B8B8);
+  FTypeColors.Add('fairy', $00D090A8);
+  FTypeColors.Add('normal', $00A8A8A8);
+
+  FSpeciesColors := TDictionary<string, TColor>.Create;
+  FSpeciesColors.Add('black', $002C2C2C);
+  FSpeciesColors.Add('blue', $00F09068);
+  FSpeciesColors.Add('brown', $005090A8);
+  FSpeciesColors.Add('gray', $00A8A8A8);
+  FSpeciesColors.Add('green', $0078C850);
+  FSpeciesColors.Add('pink', $00B8A0F8);
+  FSpeciesColors.Add('purple', $00A04070);
+  FSpeciesColors.Add('red', $005050F0);
+  FSpeciesColors.Add('white', clWhite);
+  FSpeciesColors.Add('yellow', $0030D0F8);
 end;
 
 end.

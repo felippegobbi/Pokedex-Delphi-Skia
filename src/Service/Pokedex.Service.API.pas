@@ -57,7 +57,6 @@ begin
     if ResPokemonJSON.StatusCode = 200 then
       Result := ResPokemonJSON.Content;
   except
-    // Se der 404 ou erro de rede, retorna vazio para o Controller tratar
     Result := '';
   end;
 end;
