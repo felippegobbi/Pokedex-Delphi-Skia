@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [3.1.0] - 2026-04-10
+
+### Fixed / Corrigido
+- **Precision Text Centering**: Implemented exact vertical centering for numeric values inside `TStatsPanel` arcs using native Skia font metrics (`TSkFontMetrics` with `Ascent` and `Descent`), replacing imprecise bounds calculations.
+- **Centralização de Texto com Precisão**: Implementada a centralização vertical exata dos valores numéricos dentro dos arcos do `TStatsPanel`, substituindo cálculos imprecisos de limites por métricas nativas do Skia (`TSkFontMetrics` com `Ascent` e `Descent`).
+- **Search Bar Alignment**: Fixed the vertical alignment of the borderless `TEdit` within the rounded search bar container, respecting the font's natural height.
+- **Alinhamento da Barra de Busca**: Correção do alinhamento vertical do `TEdit` sem bordas na barra de pesquisa, respeitando a altura natural da fonte dentro do container arredondado.
+- **Sprite Bounding Box**: Adjusted the geometric center of the `TSkAnimatedImage` (`skImgPokemon`) to prevent the Pokémon sprite from being displaced or visually squashed against the description panel.
+- **Bounding Box do Sprite**: Ajuste do centro geométrico do `TSkAnimatedImage` (`skImgPokemon`), evitando que o sprite do Pokémon fique deslocado ou achatado contra o painel de descrição.
+
+---
+
 ## [3.0.0] - 2026-04-09
 
 ### Added / Adicionado

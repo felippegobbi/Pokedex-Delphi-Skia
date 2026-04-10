@@ -1,4 +1,4 @@
-unit Pokedex.View.StatsPanel;
+﻿unit Pokedex.View.StatsPanel;
 
 interface
 
@@ -26,14 +26,17 @@ type
     FWeight: string;
     FHeight: string;
     FAbility: string;
+    FFontFamily: string;
     procedure DrawStats(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
     function AbbreviateStat(const AName: string): string;
+    function MakeTypeface: ISkTypeface;
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadStats(const AStats: TArray<TPokemonStat>);
     procedure LoadInfo(const AWeight, AHeight, AAbility: string);
     property BarColor: TAlphaColor read FBarColor write FBarColor;
+    property FontFamily: string read FFontFamily write FFontFamily;
   end;
 
 implementation
@@ -45,11 +48,13 @@ const
   CARD_PAD = 8;
   PANEL_PAD = 10;
   INFO_H = 72;
+  DARK_BG: TAlphaColor = $FF2A2A2A;
 
 constructor TStatsPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FBarColor := $FFE25D27;
+  FFontFamily := '';
   SetLength(FStats, 0);
   OnDraw := DrawStats;
 end;
@@ -66,6 +71,18 @@ begin
   FHeight := AHeight;
   FAbility := AAbility;
   Redraw;
+end;
+
+function TStatsPanel.MakeTypeface: ISkTypeface;
+begin
+  if FFontFamily <> '' then
+    Result := TSkTypeface.MakeFromName(FFontFamily, TSkFontStyle.Normal)
+  else
+    Result := TSkTypeface.MakeDefault;
+
+  // Fallback se nao encontrou
+  if Result = nil then
+    Result := TSkTypeface.MakeDefault;
 end;
 
 function TStatsPanel.AbbreviateStat(const AName: string): string;
@@ -89,27 +106,17 @@ end;
 procedure TStatsPanel.DrawStats(ASender: TObject; const ACanvas: ISkCanvas;
   const ADest: TRectF; const AOpacity: Single);
 var
-  LCount: Integer;
+  LCount, I, LCol, LRow: Integer;
   LRows: Integer;
-  LCellW: Single;
-  LCellH: Single;
+  LCellW, LCellH, LCX, LCY, LRadius, LSweep, LTextWidth: Single;
+  // CORREÇÃO: LCellW e LCellH declarados aqui
   LPaint: ISkPaint;
-  LFont: ISkFont;
-  LFontSm: ISkFont;
-  LFontInfo: ISkFont;
-  LFontBold: ISkFont;
+  LFont, LFontSm, LFontInfo, LFontBold: ISkFont;
   LTypeface: ISkTypeface;
-  I: Integer;
-  LCol, LRow: Integer;
-  LCX, LCY: Single;
-  LRadius: Single;
-  LSweep: Single;
-  LRect: TRectF;
-  LPanelRect: TRectF;
-  LGridRect: TRectF;
+  LRect, LPanelRect, LGridRect: TRectF;
   LText: string;
-  LBounds: TRectF;
   LStat: TPokemonStat;
+  LMetrics: TSkFontMetrics; // Para centralização vertical exata
 begin
   LCount := Length(FStats);
   if LCount = 0 then
@@ -120,11 +127,14 @@ begin
 
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
+
+  // --- 1. FUNDO DO CARD ---
   LPaint.Style := TSkPaintStyle.Fill;
-  LPaint.Color := $EE111111;
+  LPaint.Color := DARK_BG;
   ACanvas.DrawRoundRect(LPanelRect, 16, 16, LPaint);
 
-  LTypeface := TSkTypeface.MakeDefault;
+  // --- 2. FONTES ---
+  LTypeface := MakeTypeface;
   LFontInfo := TSkFont.Create(LTypeface, 11);
   LFontBold := TSkFont.Create(LTypeface, 11);
   LFontBold.Embolden := True;
@@ -132,8 +142,7 @@ begin
   LFontSm := TSkFont.Create(LTypeface, 10);
   LFontSm.Embolden := True;
 
-  // Peso / Altura / Habilidade
-  LPaint.Style := TSkPaintStyle.Fill;
+  // --- 3. CABEÇALHO (Peso / Altura / Habilidade) ---
   LPaint.Color := $88FFFFFF;
   ACanvas.DrawSimpleText('PESO', LPanelRect.Left + 16, LPanelRect.Top + 22,
     LFontInfo, LPaint);
@@ -150,71 +159,56 @@ begin
   ACanvas.DrawSimpleText(FAbility, LPanelRect.Left + 110, LPanelRect.Top + 62,
     LFontBold, LPaint);
 
-  // Linha divis�ria
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := 0.5;
-  LPaint.Color := $33FFFFFF;
-  ACanvas.DrawLine(TPointF.Create(LPanelRect.Left + 16, LPanelRect.Top + INFO_H
-    + 2), TPointF.Create(LPanelRect.Right - 16, LPanelRect.Top + INFO_H +
-    2), LPaint);
-
-  // �rea dos arcos
+  // --- 4. ÁREA DOS ARCOS ---
   LGridRect := TRectF.Create(LPanelRect.Left, LPanelRect.Top + INFO_H + 8,
     LPanelRect.Right, LPanelRect.Bottom);
-
   LRows := Ceil(LCount / COLS);
-  LCellW := LGridRect.Width / COLS;
+  LCellW := LGridRect.Width / COLS; // Atribuição que estava falhando
   LCellH := LGridRect.Height / LRows;
-
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := ARC_STROKE;
-  LPaint.StrokeCap := TSkStrokeCap.Round;
 
   for I := 0 to LCount - 1 do
   begin
     LStat := FStats[I];
     LCol := I mod COLS;
     LRow := I div COLS;
-
     LCX := LGridRect.Left + (LCol * LCellW) + (LCellW / 2);
     LCY := LGridRect.Top + (LRow * LCellH) + (LCellH / 2);
-
     LRadius := (Min(LCellW, LCellH) / 2) - ARC_STROKE - CARD_PAD - 8;
-
-    // Trilho
-    LPaint.Color := $33FFFFFF;
     LRect := TRectF.Create(LCX - LRadius, LCY - LRadius, LCX + LRadius,
       LCY + LRadius);
-    ACanvas.DrawArc(LRect, -90, 360, False, LPaint);
 
-    // Arco colorido
-    LSweep := 360 * (LStat.Value / MAX_STAT);
-
-    if FBarColor = $FF2C2C2C then
-      LPaint.Color := $FFFFD700 // dourado � vis�vel sobre preto
-    else
-      LPaint.Color := FBarColor;
-
-    ACanvas.DrawArc(LRect, -90, LSweep, False, LPaint);
-
-    // Valor num�rico centralizado
-    LPaint.Style := TSkPaintStyle.Fill;
-    LPaint.Color := $FFFFFFFF;
-    LText := LStat.Value.ToString;
-    LFont.MeasureText(LText, LBounds, LPaint);
-    ACanvas.DrawSimpleText(LText, LCX - (LBounds.Width / 2),
-      LCY + (LBounds.Height / 3), LFont, LPaint);
-
-    // Label acima do arco na cor do tema
-    LPaint.Color := FBarColor;
-    LText := AbbreviateStat(LStat.Name);
-    LFontSm.MeasureText(LText, LBounds, LPaint);
-    ACanvas.DrawSimpleText(LText, LCX - (LBounds.Width / 2),
-      LCY - LRadius - ARC_STROKE - 2, LFontSm, LPaint);
-
+    // Trilho
     LPaint.Style := TSkPaintStyle.Stroke;
     LPaint.StrokeWidth := ARC_STROKE;
     LPaint.StrokeCap := TSkStrokeCap.Round;
+    LPaint.Color := $33FFFFFF;
+    ACanvas.DrawArc(LRect, -90, 360, False, LPaint);
+
+    // Arco Colorido
+    LSweep := 360 * (LStat.Value / MAX_STAT);
+    if FBarColor = $FF2C2C2C then
+      LPaint.Color := $FFFFD700
+    else
+      LPaint.Color := FBarColor;
+    ACanvas.DrawArc(LRect, -90, LSweep, False, LPaint);
+
+    // Valor Centralizado (Verticalmente com métricas)
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Color := $FFFFFFFF;
+    LText := LStat.Value.ToString;
+    LTextWidth := LFont.MeasureText(LText, LPaint);
+    LFont.GetMetrics(LMetrics);
+
+    // Fórmula: Baseline = Centro - (Ascent + Descent) / 2
+    ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),
+      LCY - (LMetrics.Ascent + LMetrics.Descent) / 2, LFont, LPaint);
+
+    // Label do Atributo
+    LPaint.Color := FBarColor;
+    LText := AbbreviateStat(LStat.Name);
+    LTextWidth := LFontSm.MeasureText(LText, LPaint);
+    ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),
+      LCY - LRadius - ARC_STROKE - 5, LFontSm, LPaint);
   end;
 end;
 
