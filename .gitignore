@@ -9,6 +9,8 @@
 *.map
 *.o
 *.obj
+*.~dsk
+*.~dp
 
 # Histórico e configurações locais (NUNCA envie estes)
 __history/
