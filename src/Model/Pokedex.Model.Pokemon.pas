@@ -8,7 +8,7 @@ uses
   System.SysUtils;
 
 type
-  TAbilityInfo = class
+  TApiResource = class
   private
     [JSONName('name')]
     FName: string;
@@ -22,14 +22,14 @@ type
   TAbility = class
   private
     [JSONName('ability')]
-    FAbility: TAbilityInfo;
+    FAbility: TApiResource;
   public
-    property Ability: TAbilityInfo read FAbility write FAbility;
+    property Ability: TApiResource read FAbility write FAbility;
     constructor Create;
     destructor Destroy; override;
   end;
 
-  TTypeInfo = class
+  TNamedResource = class
   private
     [JSONName('name')]
     FName: string;
@@ -40,9 +40,9 @@ type
   TPokemonType = class
   private
     [JSONName('type')]
-    FType: TTypeInfo;
+    FType: TNamedResource;
   public
-    property &Type: TTypeInfo read FType write FType;
+    property &Type: TNamedResource read FType write FType;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -55,27 +55,16 @@ type
     property FrontDefault: string read FFrontDefault write FFrontDefault;
   end;
 
-  TStatInfo = class
-  private
-    [JSONName('name')]
-    FName: string;
-    [JSONName('url')]
-    FUrl: string;
-  public
-    property Name: string read FName write FName;
-    property Url: string read FUrl write FUrl;
-  end;
-
   TStatEntry = class
   private
     [JSONName('base_stat')]
     FBaseStat: Integer;
     [JSONName('stat')]
-    FStat: TStatInfo;
+    FStat: TApiResource;
   public
     destructor Destroy; override;
     property BaseStat: Integer read FBaseStat write FBaseStat;
-    property Stat: TStatInfo read FStat write FStat;
+    property Stat: TApiResource read FStat write FStat;
   end;
 
   TFlavorText = class
@@ -83,10 +72,10 @@ type
     [JSONName('flavor_text')]
     FText: string;
     [JSONName('language')]
-    FLanguage: TAbilityInfo;
+    FLanguage: TApiResource;
   public
     property Text: string read FText write FText;
-    property Language: TAbilityInfo read FLanguage write FLanguage;
+    property Language: TApiResource read FLanguage write FLanguage;
   end;
 
   TPokemonSpecies = class
@@ -94,15 +83,15 @@ type
     [JSONName('flavor_text_entries')]
     FFlavorEntries: TArray<TFlavorText>;
     [JSONName('evolution_chain')]
-    FEvolutionChain: TAbilityInfo;
+    FEvolutionChain: TApiResource;
     [JSONName('color')]
-    FColor: TAbilityInfo;
+    FColor: TApiResource;
   public
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
       write FFlavorEntries;
-    property EvolutionChain: TAbilityInfo read FEvolutionChain
+    property EvolutionChain: TApiResource read FEvolutionChain
       write FEvolutionChain;
-    property Color: TAbilityInfo read FColor write FColor;
+    property Color: TApiResource read FColor write FColor;
 
     function GetDescription: string;
   end;
@@ -124,10 +113,12 @@ type
     [JSONName('types')]
     FTypes: TArray<TPokemonType>;
     [JSONName('species')]
-    FSpecies: TAbilityInfo;
+    FSpecies: TApiResource;
     [JSONName('stats')]
     FStats: TArray<TStatEntry>;
     FSpeciesData: TPokemonSpecies;
+    function GetSpriteUrl: string;
+
   public
     property Id: Integer read FId write FId;
     property Name: string read FName write FName;
@@ -136,9 +127,10 @@ type
     property Sprites: TSprites read FSprites write FSprites;
     property Abilities: TArray<TAbility> read FAbilities write FAbilities;
     property Types: TArray<TPokemonType> read FTypes write FTypes;
-    property Species: TAbilityInfo read FSpecies write FSpecies;
+    property Species: TApiResource read FSpecies write FSpecies;
     property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
-
+    property Stats: TArray<TStatEntry> read FStats write FStats;
+    property SpriteUrl: string read GetSpriteUrl;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -156,9 +148,9 @@ var
   I: Integer;
   LStat: TStatEntry;
 begin
-  FSprites.Free;
-  FSpecies.Free;
-  FSpeciesData.Free;
+  FreeAndNil(FSprites);
+  FreeAndNil(FSpecies);
+  FreeAndNil(FSpeciesData);
 
   for I := 0 to Length(FAbilities) - 1 do
     FAbilities[I].Free;
@@ -172,10 +164,18 @@ begin
   inherited;
 end;
 
+function TPokemon.GetSpriteUrl: string;
+begin
+  if Assigned(FSprites) then
+    Result := FSprites.FrontDefault
+  else
+    Result := '';
+end;
+
 { TAbility }
 constructor TAbility.Create;
 begin
-  FAbility := TAbilityInfo.Create;
+  FAbility := TApiResource.Create;
 end;
 
 destructor TAbility.Destroy;
@@ -187,7 +187,7 @@ end;
 { TPokemonType }
 constructor TPokemonType.Create;
 begin
-  FType := TTypeInfo.Create;
+  FType := TNamedResource.Create;
 end;
 
 destructor TPokemonType.Destroy;

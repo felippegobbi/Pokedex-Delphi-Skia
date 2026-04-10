@@ -4,7 +4,7 @@ object PokedexView: TPokedexView
   BorderStyle = bsSingle
   Caption = 'Pok'#233'dex'
   ClientHeight = 580
-  ClientWidth = 368
+  ClientWidth = 703
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -18,71 +18,48 @@ object PokedexView: TPokedexView
   object pnlTopContainer: TPanel
     Left = 0
     Top = 0
-    Width = 368
-    Height = 41
+    Width = 703
+    Height = 48
     Align = alTop
+    BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 0
-    object cbSearchInput: TComboBox
-      Left = 8
-      Top = 10
-      Width = 273
-      Height = 23
-      AutoCompleteDelay = 300
-      TabOrder = 0
-      TextHint = 'Digite o nome ou ID do Pok'#233'mon desejado.'
-    end
-    object btnSearchAction: TButton
-      Left = 287
-      Top = 9
-      Width = 75
-      Height = 25
-      Caption = 'Buscar'
-      TabOrder = 1
-      OnClick = btnSearchActionClick
-    end
   end
   object pnlImage: TPanel
     Left = 0
-    Top = 41
+    Top = 48
     Width = 368
-    Height = 468
-    Align = alClient
+    Height = 472
+    Align = alLeft
+    BevelOuter = bvNone
     Padding.Left = 10
     Padding.Top = 15
     Padding.Right = 10
     Padding.Bottom = 15
     ParentBackground = False
     TabOrder = 1
-    ExplicitHeight = 375
     object lblDisplayName: TLabel
-      Left = 11
-      Top = 16
-      Width = 346
+      Left = 10
+      Top = 15
+      Width = 348
       Height = 37
       Align = alTop
       Alignment = taCenter
-      Caption = 'Nome do Pok'#233'mon'
+      Caption = 'Pok'#233'dex'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWindowText
       Font.Height = -27
       Font.Name = 'Segoe UI'
       Font.Style = [fsBold]
       ParentFont = False
-      ExplicitLeft = 1
-      ExplicitTop = 1
-      ExplicitWidth = 247
+      ExplicitWidth = 110
     end
     object skImgPokemon: TSkAnimatedImage
-      Left = 11
-      Top = 53
-      Width = 346
-      Height = 339
+      Left = 10
+      Top = 52
+      Width = 348
+      Height = 405
       Align = alClient
-      ExplicitLeft = 1
-      ExplicitTop = 38
-      ExplicitWidth = 366
-      ExplicitHeight = 258
       object btnNext: TSkSvg
         Left = 297
         Top = 144
@@ -105,23 +82,6 @@ object PokedexView: TPokedexView
           'vg>'
       end
     end
-    object mmDescription: TMemo
-      Left = 11
-      Top = 392
-      Width = 346
-      Height = 60
-      Align = alBottom
-      Color = -1
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWhite
-      Font.Height = -12
-      Font.Name = 'Segoe UI'
-      Font.Style = [fsBold]
-      ParentFont = False
-      ReadOnly = True
-      TabOrder = 1
-      ExplicitTop = 398
-    end
     object fpTypes: TFlowPanel
       Left = 8
       Top = 38
@@ -130,7 +90,7 @@ object PokedexView: TPokedexView
       AutoSize = True
       BevelOuter = bvNone
       ShowCaption = False
-      TabOrder = 2
+      TabOrder = 1
       object lblType: TLabel
         Left = 0
         Top = 0
@@ -141,86 +101,24 @@ object PokedexView: TPokedexView
     end
   end
   object pnlInfo: TRelativePanel
-    Left = 0
-    Top = 509
-    Width = 368
-    Height = 71
-    ControlCollection = <
-      item
-        Control = lblAbility
-        AlignBottomWithPanel = False
-        AlignHorizontalCenterWithPanel = False
-        AlignLeftWithPanel = False
-        AlignRightWithPanel = False
-        AlignTopWithPanel = False
-        AlignVerticalCenterWithPanel = False
-      end
-      item
-        Control = lblWeight
-        AlignBottomWithPanel = False
-        AlignHorizontalCenterWithPanel = False
-        AlignLeftWithPanel = False
-        AlignRightWithPanel = False
-        AlignTopWithPanel = False
-        AlignVerticalCenterWithPanel = False
-      end
-      item
-        Control = lblHeight
-        AlignBottomWithPanel = False
-        AlignHorizontalCenterWithPanel = False
-        AlignLeftWithPanel = False
-        AlignRightWithPanel = False
-        AlignTopWithPanel = False
-        AlignVerticalCenterWithPanel = False
-      end>
-    Align = alBottom
+    Left = 368
+    Top = 48
+    Width = 335
+    Height = 472
+    ControlCollection = <>
+    Align = alClient
+    BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 2
-    ExplicitTop = 440
-    DesignSize = (
-      368
-      71)
-    object lblAbility: TLabel
-      Left = 8
-      Top = 48
-      Width = 58
-      Height = 15
-      Anchors = []
-      Caption = 'Habilidade'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = 'Segoe UI'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object lblWeight: TLabel
-      Left = 8
-      Top = 6
-      Width = 26
-      Height = 15
-      Anchors = []
-      Caption = 'Peso'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = 'Segoe UI'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object lblHeight: TLabel
-      Left = 8
-      Top = 27
-      Width = 34
-      Height = 15
-      Anchors = []
-      Caption = 'Altura'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = 'Segoe UI'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
+  end
+  object pnlDescription: TPanel
+    Left = 0
+    Top = 520
+    Width = 703
+    Height = 60
+    Align = alBottom
+    BevelOuter = bvNone
+    ParentBackground = False
+    TabOrder = 3
   end
 end

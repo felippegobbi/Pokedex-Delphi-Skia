@@ -4,7 +4,7 @@
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Release</Config>
+        <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">Pokedex</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
@@ -143,6 +143,8 @@
             <Form>PokedexView</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="src\Service\Pokedex.Service.Interfaces.pas"/>
+        <DCCReference Include="src\View\Pokedex.View.StatsPanel.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

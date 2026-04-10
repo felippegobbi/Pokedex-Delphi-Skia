@@ -1,4 +1,4 @@
-unit Pokedex.View.Main;
+Ôªøunit Pokedex.View.Main;
 
 interface
 
@@ -22,22 +22,20 @@ uses
   Vcl.Skia,
   Vcl.WinXCtrls,
   System.UITypes,
-  Pokedex.Model.Pokemon;
+  Pokedex.Controller.Pokemon,
+  Pokedex.Model.Pokemon,
+  Pokedex.View.StatsPanel,
+  System.Types;
 
 type
   TPokedexView = class(TForm)
     pnlTopContainer: TPanel;
-    cbSearchInput: TComboBox;
-    btnSearchAction: TButton;
     pnlImage: TPanel;
     lblDisplayName: TLabel;
     skImgPokemon: TSkAnimatedImage;
     pnlInfo: TRelativePanel;
-    lblAbility: TLabel;
+    pnlDescription: TPanel;
     lblType: TLabel;
-    lblWeight: TLabel;
-    lblHeight: TLabel;
-    mmDescription: TMemo;
     btnNext: TSkSvg;
     btnPrev: TSkSvg;
     fpTypes: TFlowPanel;
@@ -45,10 +43,14 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure btnNextClick(Sender: TObject);
     procedure btnPrevClick(Sender: TObject);
-    procedure btnSearchActionClick(Sender: TObject);
   private
-    FPokemonList: TStringList;
     FCurrentId: Integer;
+    FController: TPokemonController;
+    FStatsPanel: TStatsPanel;
+    FDescLabel: TSkLabel;
+    FSearchBg: TSkPaintBox;
+    FSearchEdit: TEdit;
+    FSearchIcon: TSkSvg;
     procedure ApplyTheme(const AColor: TColor);
     procedure PerformSearch(const AIdOrName: string);
     procedure LoadPokemonImage(APokemon: TPokemon);
@@ -58,6 +60,19 @@ type
     procedure ClearTypeBadges;
     procedure CreateTypeBadge(const ATypeName: string);
     procedure PositionTypeContainer;
+    procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
+    procedure SearchEditKeyPress(Sender: TObject; var Key: Char);
+    procedure SearchIconClick(Sender: TObject);
+    procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
+      const ADest: TRectF; const AOpacity: Single);
+
+  const
+    MSG_NOT_FOUND = 'Pok'#233'mon n'#227'o encontrado.';
+    MSG_EMPTY_SEARCH =
+      'Por favor, informe o nome ou ID do Pok'#233'mon desejado.';
+    MSG_NOT_AVAILABLE_DESCRIPTION =
+      'Descri'#231#227'o n'#227'o dispon'#237'vel para esse Pok'#233'mon.';
+    DESC_H = 60;
   public
     { Public declarations }
   end;
@@ -71,50 +86,161 @@ implementation
 
 uses
   Pokedex.Service.API,
-  Pokedex.Controller.Pokemon,
+  Winapi.ShellAPI,
+  System.IOUtils,
   Winapi.ShlObj,
   Winapi.ActiveX,
   System.Win.ComObj;
+
+procedure TPokedexView.FormCreate(Sender: TObject);
+const
+  SEARCH_W = 300;
+  SEARCH_H = 34;
+  SEARCH_T = 7;
+begin
+  FController := TPokemonController.Create(dmPokeService);
+
+  btnNext.Visible := False;
+  btnPrev.Visible := False;
+
+  // Topbar
+  pnlTopContainer.Height := SEARCH_H + (SEARCH_T * 2);
+  pnlTopContainer.BringToFront;
+
+  // Pain√©is cobrem altura total menos o rodap√©
+  pnlImage.Align := alNone;
+  pnlImage.SetBounds(0, 0, 368, ClientHeight - DESC_H);
+  pnlImage.Anchors := [akLeft, akTop, akBottom];
+
+  pnlInfo.Align := alNone;
+  pnlInfo.SetBounds(368, 0, ClientWidth - 368, ClientHeight - DESC_H);
+  pnlInfo.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  lblDisplayName.Align := alNone;
+  lblDisplayName.AutoSize := False;
+  lblDisplayName.Alignment := taCenter;
+  lblDisplayName.SetBounds(0, pnlTopContainer.Height + 8, pnlImage.Width, 37);
+  skImgPokemon.Align := alNone;
+  skImgPokemon.SetBounds(0, lblDisplayName.Top + lblDisplayName.Height + 30,
+    // abaixo do nome + badges
+    pnlImage.Width, pnlImage.Height - (lblDisplayName.Top +
+    lblDisplayName.Height + 30));
+  skImgPokemon.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  // Barra de busca
+  FSearchBg := TSkPaintBox.Create(Self);
+  FSearchBg.Parent := pnlTopContainer;
+  FSearchBg.SetBounds(8, SEARCH_T, SEARCH_W, SEARCH_H);
+  FSearchBg.OnDraw := DrawSearchBg;
+
+  FSearchEdit := TEdit.Create(Self);
+  FSearchEdit.Parent := pnlTopContainer;
+  FSearchEdit.SetBounds(20, SEARCH_T + 5, SEARCH_W - 50, SEARCH_H - 10);
+  FSearchEdit.BorderStyle := bsNone;
+  FSearchEdit.Font.Color := clBlack;
+  FSearchEdit.Font.Name := 'Segoe UI';
+  FSearchEdit.Font.Size := 11;
+  FSearchEdit.StyleElements := [seClient];
+  FSearchEdit.TextHint := 'Nome ou ID...';
+  FSearchEdit.OnKeyPress := SearchEditKeyPress;
+
+  FSearchIcon := TSkSvg.Create(Self);
+  FSearchIcon.Parent := pnlTopContainer;
+  FSearchIcon.SetBounds(8 + SEARCH_W - 30, SEARCH_T + 7, 20, 20);
+  FSearchIcon.Svg.Source :=
+    '<svg viewBox="0 0 24 24"><path fill="rgba(0,0,0,0.5)" d="M15.5 14h-.79' +
+    'l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59' +
+    ' 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5' +
+    ' 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+  FSearchIcon.OnClick := SearchIconClick;
+
+  // Painel de stats ‚Äî margem superior sim√©trica ao rodap√©
+  FStatsPanel := TStatsPanel.Create(Self);
+  FStatsPanel.Parent := pnlInfo;
+  FStatsPanel.SetBounds(0, DESC_H, pnlInfo.Width, pnlInfo.Height - DESC_H);
+  FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  // Painel de descri√ß√£o
+  pnlDescription.Color := $00222222;
+  pnlDescription.ParentBackground := False;
+
+  FDescLabel := TSkLabel.Create(Self);
+  FDescLabel.Parent := pnlDescription;
+  FDescLabel.Align := alClient;
+  FDescLabel.Margins.Left := 16;
+  FDescLabel.Margins.Right := 16;
+  FDescLabel.Margins.Top := 8;
+  FDescLabel.Margins.Bottom := 8;
+
+  PostMessage(Handle, WM_USER + 1, 0, 0);
+end;
+
+procedure TPokedexView.DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
+  const ADest: TRectF; const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+begin
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := $55000000;
+  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
+end;
+
+procedure TPokedexView.WMAfterCreate(var Msg: TMessage);
+begin
+  PerformSearch('bulbasaur');
+end;
+
+procedure TPokedexView.FormDestroy(Sender: TObject);
+begin
+  FController.Free;
+end;
 
 procedure TPokedexView.ApplyTheme(const AColor: TColor);
 begin
   pnlImage.Color := AColor;
   pnlTopContainer.Color := AColor;
   pnlInfo.Color := AColor;
+  pnlDescription.Color := $00222222;
 
-  if AColor = $002C2C2C then
+  FSearchEdit.Color := AColor;
+  FSearchBg.Redraw;
+
+  if AColor = TPokemonController.BLACK_COLOR then
     lblDisplayName.Font.Color := clWhite
   else
     lblDisplayName.Font.Color := clBlack;
+
+  FStatsPanel.BarColor := $FF000000 or (DWORD(GetRValue(AColor)) shl 16) or
+    (DWORD(GetGValue(AColor)) shl 8) or DWORD(GetBValue(AColor));
+
+  FStatsPanel.Redraw;
+end;
+
+procedure TPokedexView.SearchEditKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+  begin
+    PerformSearch(FSearchEdit.Text);
+    Key := #0;
+  end;
+end;
+
+procedure TPokedexView.SearchIconClick(Sender: TObject);
+begin
+  PerformSearch(FSearchEdit.Text);
 end;
 
 procedure TPokedexView.btnNextClick(Sender: TObject);
-var
-  LIdx: Integer;
 begin
-  LIdx := cbSearchInput.Items.IndexOf(cbSearchInput.Text);
-
-  if (LIdx >= 0) and (LIdx < cbSearchInput.Items.Count - 1) then
-    PerformSearch(cbSearchInput.Items[LIdx + 1])
-  else
-    MessageDlg('VocÍ chegou ao fim da PokÈdex.', mtInformation, [mbOK], 0);
+  PerformSearch(IntToStr(FCurrentId + 1));
 end;
 
 procedure TPokedexView.btnPrevClick(Sender: TObject);
-var
-  LIdx: Integer;
 begin
-  LIdx := cbSearchInput.Items.IndexOf(cbSearchInput.Text);
-
-  if LIdx > 0 then
-    PerformSearch(cbSearchInput.Items[LIdx - 1])
-  else
-    MessageDlg('Este È o primeiro PokÈmon.', mtInformation, [mbOK], 0);
-end;
-
-procedure TPokedexView.btnSearchActionClick(Sender: TObject);
-begin
-  PerformSearch(cbSearchInput.Text);
+  if FCurrentId > 1 then
+    PerformSearch(IntToStr(FCurrentId - 1));
 end;
 
 procedure TPokedexView.ClearTypeBadges;
@@ -162,28 +288,11 @@ begin
   end;
 end;
 
-procedure TPokedexView.FormCreate(Sender: TObject);
-begin
-  FPokemonList := TStringList.Create;
-  TPokemonController.FillAutoCompleteList(FPokemonList);
-
-  cbSearchInput.Items.Assign(FPokemonList);
-  cbSearchInput.Sorted := False;
-
-  btnNext.Visible := False;
-  btnPrev.Visible := False;
-end;
-
-procedure TPokedexView.FormDestroy(Sender: TObject);
-begin
-  FPokemonList.Free;
-end;
-
 procedure TPokedexView.LoadPokemonImage(APokemon: TPokemon);
 var
   LStream: TMemoryStream;
 begin
-  LStream := TPokemonController.DownloadImage(APokemon.Sprites.FrontDefault);
+  LStream := FController.DownloadFile(APokemon.SpriteUrl);
   try
     if Assigned(LStream) then
       skImgPokemon.LoadFromStream(LStream)
@@ -200,23 +309,22 @@ var
 begin
   if Trim(AIdOrName).IsEmpty then
   begin
-    MessageDlg('Por favor, informe o nome ou ID do PokÈmon desejado.',
-      mtWarning, [mbOK], 0);
-    cbSearchInput.SetFocus;
+    MessageDlg(MSG_EMPTY_SEARCH, mtWarning, [mbOK], 0);
+    FSearchEdit.SetFocus;
     Exit;
   end;
 
-  LPokemon := TPokemonController.ExecuteGetPokemon(AIdOrName);
+  LPokemon := FController.ExecuteGetPokemon(AIdOrName);
 
   try
     if not Assigned(LPokemon) then
     begin
-      MessageDlg('PokÈmon n„o encontrado.', mtError, [mbOK], 0);
+      MessageDlg(MSG_NOT_FOUND, mtError, [mbOK], 0);
       Exit;
     end;
 
     FCurrentId := LPokemon.Id;
-    cbSearchInput.Text := LPokemon.Name;
+    FSearchEdit.Text := LPokemon.Name;
     btnNext.Visible := True;
     btnPrev.Visible := True;
 
@@ -249,25 +357,48 @@ begin
 end;
 
 procedure TPokedexView.UpdateFlavorText(APokemon: TPokemon);
+var
+  LText: string;
 begin
-  mmDescription.Lines.Clear;
-
   if Assigned(APokemon.SpeciesData) then
-    mmDescription.Text := APokemon.SpeciesData.GetDescription
+    LText := APokemon.SpeciesData.GetDescription
   else
-    mmDescription.Text := 'DescriÁ„o n„o disponÌvel para esse PokÈmon.';
+    LText := MSG_NOT_AVAILABLE_DESCRIPTION;
+
+  FDescLabel.Caption := LText;
+  FDescLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
+  FDescLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
+
+  if FDescLabel.Words.Count > 0 then
+  begin
+    FDescLabel.Words[0].Font.Size := 13;
+    FDescLabel.Words[0].FontColor := TAlphaColors.White;
+    FDescLabel.Words[0].Font.Slant := TSkFontComponent.TSkFontSlant.Italic;
+  end;
 end;
 
 procedure TPokedexView.UpdatePokemonStats(APokemon: TPokemon);
+var
+  LStats: TArray<TPokemonStat>;
+  LAbility: string;
+  I: Integer;
 begin
-  lblWeight.Caption := 'Peso MÈdio: ' + TPokemonController.FormatMetric
-    (APokemon.Weight, 'kg');
-  lblHeight.Caption := 'Altura MÈdia: ' + TPokemonController.FormatMetric
-    (APokemon.Height, 'm');
+  if Length(APokemon.Abilities) > 0 then
+    LAbility := UpperCase(APokemon.Abilities[0].Ability.Name)
+  else
+    LAbility := '';
 
-  if length(APokemon.Abilities) > 0 then
-    lblAbility.Caption := 'Habilidade: ' +
-      UpperCase(APokemon.Abilities[0].Ability.Name);
+  FStatsPanel.LoadInfo(TPokemonController.FormatMetric(APokemon.Weight, 'kg'),
+    TPokemonController.FormatMetric(APokemon.Height, 'm'), LAbility);
+
+  SetLength(LStats, Length(APokemon.Stats));
+  for I := 0 to High(APokemon.Stats) do
+  begin
+    LStats[I].Name := APokemon.Stats[I].Stat.Name;
+    LStats[I].Value := APokemon.Stats[I].BaseStat;
+  end;
+
+  FStatsPanel.LoadStats(LStats);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);
@@ -276,9 +407,9 @@ var
 begin
   ClearTypeBadges;
 
-  if length(APokemon.Types) > 0 then
+  if Length(APokemon.Types) > 0 then
   begin
-    for I := 0 to length(APokemon.Types) - 1 do
+    for I := 0 to Length(APokemon.Types) - 1 do
       CreateTypeBadge(APokemon.Types[I].&Type.Name);
 
     PositionTypeContainer;
