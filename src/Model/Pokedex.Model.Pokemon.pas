@@ -74,6 +74,7 @@ type
     [JSONName('language')]
     FLanguage: TApiResource;
   public
+    destructor Destroy; override;
     property Text: string read FText write FText;
     property Language: TApiResource read FLanguage write FLanguage;
   end;
@@ -87,6 +88,7 @@ type
     [JSONName('color')]
     FColor: TApiResource;
   public
+    destructor Destroy; override;
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
       write FFlavorEntries;
     property EvolutionChain: TApiResource read FEvolutionChain
@@ -133,6 +135,56 @@ type
     property SpriteUrl: string read GetSpriteUrl;
     constructor Create;
     destructor Destroy; override;
+  end;
+
+  TEvolutionTrigger = record
+    TriggerType: string;    // 'level-up', 'use-item', 'trade', etc.
+    MinLevel: Integer;
+    MinHappiness: Integer;
+    ItemName: string;       // usado em 'use-item'
+    HeldItem: string;       // trade segurando item
+    TimeOfDay: string;      // 'day', 'night'
+    KnownMoveType: string;
+  end;
+
+  TEvolutionNode = record
+    Name: string;
+    PokemonId: Integer;
+    IsActive: Boolean;
+    SpriteUrl: string;
+    Stage: Integer;         // coluna na árvore (0 = base)
+    ParentId: Integer;      // PokemonId do pai (0 para raiz)
+    Trigger: TEvolutionTrigger;
+  end;
+
+  TEvolutionDetail = class
+  private
+    [JSONName('min_level')]
+    FMinLevel: Integer;
+  public
+    property MinLevel: Integer read FMinLevel write FMinLevel;
+  end;
+
+  TEvolutionLink = class
+  private
+    [JSONName('species')]
+    FSpecies: TApiResource;
+    [JSONName('evolves_to')]
+    FEvolvesTo: TArray<TEvolutionLink>;
+  public
+    destructor Destroy; override;
+    property Species: TApiResource read FSpecies write FSpecies;
+    property EvolvesTo: TArray<TEvolutionLink> read FEvolvesTo
+      write FEvolvesTo;
+  end;
+
+  TEvolutionChainData = class
+  private
+    [JSONName('chain')]
+    FChain: TEvolutionLink;
+  public
+    destructor Destroy; override;
+    property Chain: TEvolutionLink read FChain write FChain;
   end;
 
 implementation
@@ -196,7 +248,24 @@ begin
   inherited;
 end;
 
+{ TFlavorText }
+destructor TFlavorText.Destroy;
+begin
+  FreeAndNil(FLanguage);
+  inherited;
+end;
+
 { TPokemonSpecies }
+destructor TPokemonSpecies.Destroy;
+var
+  LEntry: TFlavorText;
+begin
+  for LEntry in FFlavorEntries do
+    LEntry.Free;
+  FreeAndNil(FEvolutionChain);
+  FreeAndNil(FColor);
+  inherited;
+end;
 
 function TPokemonSpecies.GetDescription: string;
 var
@@ -225,12 +294,29 @@ begin
 end;
 
 { TStatEntry }
-
 destructor TStatEntry.Destroy;
 begin
   if Assigned(FStat) then
     FStat.Free;
 
+  inherited;
+end;
+
+{ TEvolutionLink }
+destructor TEvolutionLink.Destroy;
+var
+  LChild: TEvolutionLink;
+begin
+  FreeAndNil(FSpecies);
+  for LChild in FEvolvesTo do
+    LChild.Free;
+  inherited;
+end;
+
+{ TEvolutionChainData }
+destructor TEvolutionChainData.Destroy;
+begin
+  FreeAndNil(FChain);
   inherited;
 end;
 

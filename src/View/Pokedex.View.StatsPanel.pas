@@ -161,9 +161,10 @@ begin
 
   // --- 4. ÁREA DOS ARCOS ---
   LGridRect := TRectF.Create(LPanelRect.Left, LPanelRect.Top + INFO_H + 8,
-    LPanelRect.Right, LPanelRect.Bottom);
+    LPanelRect.Right, LPanelRect.Bottom - 80);
+
   LRows := Ceil(LCount / COLS);
-  LCellW := LGridRect.Width / COLS; // Atribuição que estava falhando
+  LCellW := LGridRect.Width / COLS;
   LCellH := LGridRect.Height / LRows;
 
   for I := 0 to LCount - 1 do
@@ -204,7 +205,10 @@ begin
       LCY - (LMetrics.Ascent + LMetrics.Descent) / 2, LFont, LPaint);
 
     // Label do Atributo
-    LPaint.Color := FBarColor;
+    if FBarColor = $FF2C2C2C then
+      LPaint.Color := $FFFFD700 // dourado — visível sobre preto
+    else
+      LPaint.Color := FBarColor;
     LText := AbbreviateStat(LStat.Name);
     LTextWidth := LFontSm.MeasureText(LText, LPaint);
     ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),

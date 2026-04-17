@@ -104,7 +104,7 @@
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <DCC_UnitSearchPath>.\src\View;.\src\Model;.\src\Service;.\src\Controller;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>.\src\View;.\src\Model;.\src\Service;.\src\Controller;.\src\Audio;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Icon_MainIcon>Pokedex_Icon.ico</Icon_MainIcon>
@@ -139,12 +139,14 @@
             <FormType>dfm</FormType>
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
+        <DCCReference Include="src\Service\Pokedex.Service.Interfaces.pas"/>
+        <DCCReference Include="src\View\Pokedex.View.EvolutionPanel.pas"/>
         <DCCReference Include="src\View\Pokedex.View.Main.pas">
             <Form>PokedexView</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="src\Service\Pokedex.Service.Interfaces.pas"/>
         <DCCReference Include="src\View\Pokedex.View.StatsPanel.pas"/>
+        <DCCReference Include="src\Audio\Pokedex.Audio.Bass.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

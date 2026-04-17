@@ -29,7 +29,7 @@ object PokedexView: TPokedexView
     Left = 0
     Top = 48
     Width = 368
-    Height = 472
+    Height = 532
     Align = alLeft
     BevelOuter = bvNone
     Padding.Left = 10
@@ -38,28 +38,14 @@ object PokedexView: TPokedexView
     Padding.Bottom = 15
     ParentBackground = False
     TabOrder = 1
-    object lblDisplayName: TLabel
+    ExplicitHeight = 472
+    object skImgPokemon: TSkAnimatedImage
       Left = 10
       Top = 15
       Width = 348
-      Height = 37
-      Align = alTop
-      Alignment = taCenter
-      Caption = 'Pok'#233'dex'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -27
-      Font.Name = 'Segoe UI'
-      Font.Style = [fsBold]
-      ParentFont = False
-      ExplicitWidth = 110
-    end
-    object skImgPokemon: TSkAnimatedImage
-      Left = 10
-      Top = 52
-      Width = 348
-      Height = 405
+      Height = 502
       Align = alClient
+      ExplicitHeight = 442
       object btnNext: TSkSvg
         Left = 297
         Top = 144
@@ -91,34 +77,18 @@ object PokedexView: TPokedexView
       BevelOuter = bvNone
       ShowCaption = False
       TabOrder = 1
-      object lblType: TLabel
-        Left = 0
-        Top = 0
-        Width = 3
-        Height = 15
-        Align = alLeft
-      end
     end
   end
   object pnlInfo: TRelativePanel
     Left = 368
     Top = 48
     Width = 335
-    Height = 472
+    Height = 532
     ControlCollection = <>
     Align = alClient
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 2
-  end
-  object pnlDescription: TPanel
-    Left = 0
-    Top = 520
-    Width = 703
-    Height = 60
-    Align = alBottom
-    BevelOuter = bvNone
-    ParentBackground = False
-    TabOrder = 3
+    ExplicitHeight = 472
   end
 end

@@ -3,6 +3,44 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [4.0.0] - 2026-04-17
+
+### Added / Adicionado
+- **TEvolutionPanel Component**: New Skia-based component that renders the full Pokémon evolution tree, including branching chains (e.g. Eevee's 8 evolutions). Sprites load asynchronously, inactive nodes are rendered in grayscale, and the active Pokémon is highlighted with the theme color.
+- **Componente TEvolutionPanel**: Novo componente baseado em Skia que renderiza a árvore completa de evoluções, incluindo cadeias ramificadas (ex.: 8 evoluções do Eevee). Sprites carregam de forma assíncrona, nós inativos são renderizados em escala de cinza, e o Pokémon ativo é destacado com a cor do tema.
+- **Evolution Triggers**: Each evolution node displays its trigger condition — level-up (`Nv.16`), friendship (`Amizade (Dia/Noite)`), item use (`Water Stone`), trade (`Troca c/ King's Rock`), or any other mechanism from the PokeAPI.
+- **Gatilhos de Evolução**: Cada nó de evolução exibe sua condição de gatilho — level-up (`Nv.16`), amizade (`Amizade (Dia/Noite)`), uso de item (`Water Stone`), troca (`Troca c/ King's Rock`), ou qualquer outro mecanismo da PokeAPI.
+- **Evolution Tree Layout**: Branching evolutions are rendered using a tree-branch style (vertical trunk + horizontal branches per child). Linear chains use a direct line. Mouse wheel scrolls the panel when the chain exceeds the visible area.
+- **Layout de Árvore Evolutiva**: Evoluções ramificadas são desenhadas no estilo árvore (tronco vertical + galhos horizontais por filho). Cadeias lineares usam linha direta. Mouse wheel rola o painel quando a cadeia excede a área visível.
+- **Pokémon Cry Audio**: Clicking the speaker icon or the Pokémon sprite plays the official cry sound (`.ogg` via PokeAPI), streamed in memory using BASS audio library.
+- **Áudio do Grito do Pokémon**: Clicar no ícone de som ou no sprite do Pokémon reproduz o grito oficial (`.ogg` via PokeAPI), transmitido em memória via biblioteca de áudio BASS.
+- **`TEvolutionTrigger` Record**: New value type in the model carrying all evolution condition data parsed from `evolution_details` — trigger type, level, happiness, item, held item, time of day, and known move type.
+- **Record `TEvolutionTrigger`**: Novo tipo valor no modelo que carrega todos os dados de condição de evolução extraídos de `evolution_details` — tipo de gatilho, nível, amizade, item, item segurado, hora do dia e tipo de movimento conhecido.
+
+### Changed / Alterado
+- **Async Search**: `PerformSearch` now executes the Pokémon fetch, sprite download, and evolution chain resolution concurrently in a background thread, keeping the UI responsive during network requests.
+- **Busca Assíncrona**: `PerformSearch` agora executa a busca do Pokémon, download do sprite e resolução da cadeia evolutiva de forma concorrente em uma thread de background, mantendo a UI responsiva durante requisições de rede.
+- **Service Layer**: Removed the visual REST components (`TRESTClient`, `TRESTRequest`, `TRESTResponse`) from `TdmPokeService`. All HTTP calls now use dedicated `TNetHTTPClient` instances.
+- **Camada de Serviço**: Removidos os componentes REST visuais (`TRESTClient`, `TRESTRequest`, `TRESTResponse`) do `TdmPokeService`. Todas as chamadas HTTP agora usam instâncias dedicadas de `TNetHTTPClient`.
+- **Display Name Label**: `lblDisplayName` (`TLabel`) replaced with a dynamically created `TSkLabel` (`FDisplayNameLabel`) for consistent Skia font rendering and proper theme color integration.
+- **Label do Nome**: `lblDisplayName` (`TLabel`) substituído por um `TSkLabel` criado dinamicamente (`FDisplayNameLabel`), garantindo renderização consistente com Skia e integração correta com a cor do tema.
+- **Evolution Chain Parsing**: `GetEvolutionChain` rewritten with a recursive nested procedure (`CollectNodes`) that traverses all branches of the evolution tree (previously only followed `evolves_to[0]`). Parsing is now null-safe via `SafeObj` helper to avoid `EInvalidCast` on nullable PokeAPI fields.
+- **Parsing da Cadeia Evolutiva**: `GetEvolutionChain` reescrita com uma procedure aninhada recursiva (`CollectNodes`) que percorre todos os galhos da árvore evolutiva (anteriormente seguia apenas `evolves_to[0]`). O parsing agora é null-safe via helper `SafeObj`, evitando `EInvalidCast` em campos nullable da PokeAPI.
+- **`EVOLUTION_H`**: Evolution panel height increased from `110` to `200` px to accommodate trigger labels and larger sprite sizes.
+- **`EVOLUTION_H`**: Altura do painel de evolução aumentada de `110` para `200` px para acomodar os labels de gatilho e sprites maiores.
+
+### Fixed / Corrigido
+- **`EInvalidCast` on Evolution Parsing**: `GetValue<TJSONObject>` raised `EInvalidCast` when PokeAPI returned nullable fields (`item`, `held_item`, `known_move_type`) as `null` in `evolution_details`. Replaced all nullable object reads with a `SafeObj` guard that checks `is TJSONObject` before casting.
+- **`EInvalidCast` no Parsing de Evolução**: `GetValue<TJSONObject>` lançava `EInvalidCast` quando a PokeAPI retornava campos nullable (`item`, `held_item`, `known_move_type`) como `null` em `evolution_details`. Todas as leituras de objetos nullable foram substituídas pelo guard `SafeObj`, que verifica `is TJSONObject` antes do cast.
+- **Duplicate `CreateForm`**: Removed duplicate `Application.CreateForm(TPokedexView, PokedexView)` call in `Pokedex.dpr` that was creating two main forms on startup.
+- **`CreateForm` Duplicado**: Removida chamada duplicada de `Application.CreateForm(TPokedexView, PokedexView)` no `Pokedex.dpr` que criava dois formulários principais na inicialização.
+
+### Removed / Removido
+- **`FillAutoCompleteList`**: Removed unused method from controller that fetched all 2000+ Pokémon names for an autocomplete list no longer present in the UI.
+- **`FillAutoCompleteList`**: Removido método não utilizado do controller que buscava mais de 2000 nomes de Pokémon para uma lista de autocomplete que não existe mais na interface.
+
+---
+
 ## [3.1.0] - 2026-04-10
 
 ### Fixed / Corrigido
