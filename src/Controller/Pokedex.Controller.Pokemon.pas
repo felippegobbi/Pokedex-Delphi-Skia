@@ -6,6 +6,7 @@ uses
   Pokedex.Model.Pokemon,
   REST.Json,
   System.SysUtils,
+  Winapi.Windows,
   System.Classes,
   System.UITypes,
   VCL.Graphics,
@@ -34,9 +35,12 @@ type
     class function GetCryUrl(const AId: Integer): string;
     class function GetColorByString(const AColorName: string): TColor;
     class function GetTypeColor(const ATypeName: string): TColor;
+    class function GetPreferredLanguage: string;
+    class function RandomPokemonId: Integer;
 
   const
     BLACK_COLOR = $002C2C2C;
+    POKEMON_MAX_ID = 1025;
     BLUE_COLOR = $00F09068;
     BROWN_COLOR = $005090A8;
     GRAY_COLOR = $00A8A8A8;
@@ -408,6 +412,39 @@ begin
   FSpeciesColors.Add('white', WHITE_COLOR);
   FSpeciesColors.Add('yellow', YELLOW_COLOR);
 
+end;
+
+class function TPokemonController.GetPreferredLanguage: string;
+var
+  LLocaleName: array[0..LOCALE_NAME_MAX_LENGTH - 1] of Char;
+  LLocale, LPrimary: string;
+begin
+  Result := 'en';
+  if GetUserDefaultLocaleName(LLocaleName, LOCALE_NAME_MAX_LENGTH) = 0 then
+    Exit;
+  LLocale := string(LLocaleName);
+  LPrimary := LLocale.Split(['-'])[0].ToLower;
+  case LPrimary of
+    'fr': Result := 'fr';
+    'de': Result := 'de';
+    'es': Result := 'es';
+    'it': Result := 'it';
+    'ja': Result := 'ja';
+    'ko': Result := 'ko';
+    'zh':
+      if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)
+        or LLocale.StartsWith('zh-HK', True) then
+        Result := 'zh-Hant'
+      else
+        Result := 'zh-Hans';
+  else
+    Result := 'en';
+  end;
+end;
+
+class function TPokemonController.RandomPokemonId: Integer;
+begin
+  Result := Random(POKEMON_MAX_ID) + 1;
 end;
 
 end.

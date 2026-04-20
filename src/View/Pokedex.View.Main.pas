@@ -50,6 +50,7 @@ type
     FSearchIcon: TSkSvg;
     FFontName: string;
     FCryIcon: TSkSvg;
+    FRandomIcon: TSkSvg;
     FCurrentChannel: LongWord;
     FCurrentStream: TMemoryStream;
     FCryGeneration: Integer;
@@ -84,6 +85,7 @@ type
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
+    procedure RandomIconClick(Sender: TObject);
     procedure SearchIconClick(Sender: TObject);
     procedure SearchEditKeyPress(Sender: TObject; var Key: Char);
     procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
@@ -144,6 +146,7 @@ begin
   SetupDescriptionPanel;
   SetupEvolutionPanel;
   BASS_Init(-1, 44100, 0, Handle, nil);
+  Randomize;
 end;
 
 procedure TPokedexView.SetupLayout;
@@ -223,7 +226,7 @@ begin
   FSearchBg.OnDraw := DrawSearchBg;
 
   LEditLeft := SEARCH_H div 2;
-  LEditWidth := SEARCH_W - LEditLeft - (ICON_SIZE * 2) - (ICON_PAD * 3);
+  LEditWidth := SEARCH_W - LEditLeft - (ICON_SIZE * 3) - (ICON_PAD * 4);
 
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent := FSearchContainer;
@@ -267,6 +270,20 @@ begin
   FCryIcon.Cursor := crHandPoint;
   FCryIcon.OnClick := CryIconClick;
   FCryIcon.BringToFront;
+
+  FRandomIcon := TSkSvg.Create(Self);
+  FRandomIcon.Parent := FSearchContainer;
+  FRandomIcon.SetBounds(SEARCH_W - (ICON_SIZE * 3) - (ICON_PAD * 4),
+    (SEARCH_H - ICON_SIZE) div 2, ICON_SIZE, ICON_SIZE);
+  FRandomIcon.Anchors := [akTop, akRight];
+  FRandomIcon.Svg.Source :=
+    '<svg viewBox="0 0 24 24"><path fill="white" d="M10.59 9.17L5.41 4 4 5.41' +
+    'l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5' +
+    'V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3' +
+    '.13z"/></svg>';
+  FRandomIcon.Cursor := crHandPoint;
+  FRandomIcon.OnClick := RandomIconClick;
+  FRandomIcon.BringToFront;
 end;
 
 procedure TPokedexView.SetupStatsPanel;
@@ -515,6 +532,11 @@ end;
 procedure TPokedexView.SearchIconClick(Sender: TObject);
 begin
   PerformSearch(FSearchEdit.Text);
+end;
+
+procedure TPokedexView.RandomIconClick(Sender: TObject);
+begin
+  PerformSearch(TPokemonController.RandomPokemonId.ToString);
 end;
 
 procedure TPokedexView.btnNextClick(Sender: TObject);
@@ -831,7 +853,7 @@ var
   LText: string;
 begin
   if Assigned(APokemon.SpeciesData) then
-    LText := APokemon.SpeciesData.GetDescription
+    LText := APokemon.SpeciesData.GetDescription(TPokemonController.GetPreferredLanguage)
   else
     LText := MSG_NOT_AVAILABLE_DESCRIPTION;
 

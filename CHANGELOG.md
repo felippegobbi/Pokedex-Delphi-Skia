@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.1.0] - 2026-04-20
+
+### Added / Adicionado
+- **Random Pokémon Button**: A shuffle icon added to the search bar. Clicking it generates a random ID (1–1025) and loads a random Pokémon immediately.
+- **Botão de Pokémon Aleatório**: Ícone de shuffle adicionado na barra de busca. Ao clicar, gera um ID aleatório (1–1025) e carrega um Pokémon aleatório imediatamente.
+- **Windows Locale Flavor Text**: `GetPreferredLanguage` detects the system UI language via `GetUserDefaultLocaleName` and maps it to PokeAPI language codes (`fr`, `de`, `es`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, fallback `en`). The flavor text description is now shown in the OS language when available.
+- **Flavor Text no Idioma do Windows**: `GetPreferredLanguage` detecta o idioma da interface do sistema via `GetUserDefaultLocaleName` e mapeia para os códigos de idioma da PokeAPI (`fr`, `de`, `es`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, fallback `en`). A descrição do flavor text agora é exibida no idioma do sistema quando disponível.
+
+### Changed / Alterado
+- **`GetDescription`**: Now accepts `ALang: string = 'en'` parameter. Iterates all entries without breaking, keeping the last match per language (most recent game version's text is used instead of the oldest).
+- **`GetDescription`**: Agora aceita parâmetro `ALang: string = 'en'`. Itera todas as entradas sem interromper, mantendo a última correspondência por idioma (texto da versão de jogo mais recente é usado em vez do mais antigo).
+- **`POKEMON_MAX_ID = 1025`**: Generation IX Pokémon are now included in the random pool.
+- **`POKEMON_MAX_ID = 1025`**: Pokémon da Geração IX estão agora incluídos no sorteio aleatório.
+
+---
+
 ## [5.0.1] - 2026-04-20
 
 ### Fixed / Corrigido
