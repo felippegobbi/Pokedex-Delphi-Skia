@@ -11,6 +11,8 @@ uses
 
 type
   TdmPokeService = class(TDataModule, IPokemonService)
+  private
+    function DoGet(const AUrl: string): string;
   public
     function GetPokemonJSON(const AIdOrName: string): string;
     function GetSpeciesJSON(const AUrl: string): string;
@@ -28,64 +30,43 @@ implementation
 const
   BASE_URL = 'https://pokeapi.co/api/v2';
 
-function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
+function TdmPokeService.DoGet(const AUrl: string): string;
 var
   LHttp: TNetHTTPClient;
   LResponse: IHTTPResponse;
 begin
-  Result := '';
   LHttp := TNetHTTPClient.Create(nil);
   try
     try
-      LResponse := LHttp.Get(BASE_URL + '/pokemon/' + LowerCase(Trim(AIdOrName)));
-      if LResponse.StatusCode = 200 then
-        Result := LResponse.ContentAsString;
+      LResponse := LHttp.Get(AUrl);
     except
-      Result := '';
+      on E: Exception do
+        raise EPokemonNetworkError.Create(E.Message);
+    end;
+    case LResponse.StatusCode of
+      200: Result := LResponse.ContentAsString;
+      404: raise EPokemonNotFound.Create('Pok'#233'mon n'#227'o encontrado');
+    else
+      raise EPokemonNetworkError.CreateFmt('Erro HTTP %d', [LResponse.StatusCode]);
     end;
   finally
     LHttp.Free;
   end;
+end;
+
+function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
+begin
+  Result := DoGet(BASE_URL + '/pokemon/' + LowerCase(Trim(AIdOrName)));
 end;
 
 function TdmPokeService.GetSpeciesJSON(const AUrl: string): string;
-var
-  LHttp: TNetHTTPClient;
-  LResponse: IHTTPResponse;
 begin
-  Result := '';
-  LHttp := TNetHTTPClient.Create(nil);
-  try
-    try
-      LResponse := LHttp.Get(AUrl);
-      if LResponse.StatusCode = 200 then
-        Result := LResponse.ContentAsString;
-    except
-      Result := '';
-    end;
-  finally
-    LHttp.Free;
-  end;
+  Result := DoGet(AUrl);
 end;
 
 function TdmPokeService.GetEvolutionChainJSON(const AUrl: string): string;
-var
-  LHttp: TNetHTTPClient;
-  LResponse: IHTTPResponse;
 begin
-  Result := '';
-  LHttp := TNetHTTPClient.Create(nil);
-  try
-    try
-      LResponse := LHttp.Get(AUrl);
-      if LResponse.StatusCode = 200 then
-        Result := LResponse.ContentAsString;
-    except
-      Result := '';
-    end;
-  finally
-    LHttp.Free;
-  end;
+  Result := DoGet(AUrl);
 end;
 
 end.

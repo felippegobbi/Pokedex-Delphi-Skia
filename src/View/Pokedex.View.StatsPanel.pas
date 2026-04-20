@@ -80,7 +80,6 @@ begin
   else
     Result := TSkTypeface.MakeDefault;
 
-  // Fallback se nao encontrou
   if Result = nil then
     Result := TSkTypeface.MakeDefault;
 end;
@@ -109,7 +108,6 @@ var
   LCount, I, LCol, LRow: Integer;
   LRows: Integer;
   LCellW, LCellH, LCX, LCY, LRadius, LSweep, LTextWidth: Single;
-  // CORREÇÃO: LCellW e LCellH declarados aqui
   LPaint: ISkPaint;
   LFont, LFontSm, LFontInfo, LFontBold: ISkFont;
   LTypeface: ISkTypeface;
@@ -128,12 +126,10 @@ begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
 
-  // --- 1. FUNDO DO CARD ---
   LPaint.Style := TSkPaintStyle.Fill;
   LPaint.Color := DARK_BG;
   ACanvas.DrawRoundRect(LPanelRect, 16, 16, LPaint);
 
-  // --- 2. FONTES ---
   LTypeface := MakeTypeface;
   LFontInfo := TSkFont.Create(LTypeface, 11);
   LFontBold := TSkFont.Create(LTypeface, 11);
@@ -142,7 +138,6 @@ begin
   LFontSm := TSkFont.Create(LTypeface, 10);
   LFontSm.Embolden := True;
 
-  // --- 3. CABEÇALHO (Peso / Altura / Habilidade) ---
   LPaint.Color := $88FFFFFF;
   ACanvas.DrawSimpleText('PESO', LPanelRect.Left + 16, LPanelRect.Top + 22,
     LFontInfo, LPaint);
@@ -159,7 +154,6 @@ begin
   ACanvas.DrawSimpleText(FAbility, LPanelRect.Left + 110, LPanelRect.Top + 62,
     LFontBold, LPaint);
 
-  // --- 4. ÁREA DOS ARCOS ---
   LGridRect := TRectF.Create(LPanelRect.Left, LPanelRect.Top + INFO_H + 8,
     LPanelRect.Right, LPanelRect.Bottom - 80);
 
@@ -178,14 +172,12 @@ begin
     LRect := TRectF.Create(LCX - LRadius, LCY - LRadius, LCX + LRadius,
       LCY + LRadius);
 
-    // Trilho
     LPaint.Style := TSkPaintStyle.Stroke;
     LPaint.StrokeWidth := ARC_STROKE;
     LPaint.StrokeCap := TSkStrokeCap.Round;
     LPaint.Color := $33FFFFFF;
     ACanvas.DrawArc(LRect, -90, 360, False, LPaint);
 
-    // Arco Colorido
     LSweep := 360 * (LStat.Value / MAX_STAT);
     if FBarColor = $FF2C2C2C then
       LPaint.Color := $FFFFD700
@@ -193,7 +185,6 @@ begin
       LPaint.Color := FBarColor;
     ACanvas.DrawArc(LRect, -90, LSweep, False, LPaint);
 
-    // Valor Centralizado (Verticalmente com métricas)
     LPaint.Style := TSkPaintStyle.Fill;
     LPaint.Color := $FFFFFFFF;
     LText := LStat.Value.ToString;
@@ -204,7 +195,6 @@ begin
     ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),
       LCY - (LMetrics.Ascent + LMetrics.Descent) / 2, LFont, LPaint);
 
-    // Label do Atributo
     if FBarColor = $FF2C2C2C then
       LPaint.Color := $FFFFD700 // dourado — visível sobre preto
     else

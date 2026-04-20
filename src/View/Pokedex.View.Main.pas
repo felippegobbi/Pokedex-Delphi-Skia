@@ -12,16 +12,13 @@ uses
   Vcl.Controls,
   Vcl.Forms,
   Vcl.Dialogs,
-  REST.Types,
-  REST.Client,
-  Data.Bind.Components,
-  Data.Bind.ObjectScope,
   Vcl.ExtCtrls,
   Vcl.StdCtrls,
   System.Skia,
   Vcl.Skia,
   Vcl.WinXCtrls,
   System.UITypes,
+  Pokedex.Service.Interfaces,
   Pokedex.Controller.Pokemon,
   Pokedex.Model.Pokemon,
   Pokedex.View.StatsPanel,
@@ -55,6 +52,7 @@ type
     FCryIcon: TSkSvg;
     FCurrentChannel: LongWord;
     FCurrentStream: TMemoryStream;
+    FCryGeneration: Integer;
     FEvolutionPanel: TEvolutionPanel;
     FDisplayNameLabel: TSkLabel;
     FThemeTextColor: TAlphaColor;
@@ -73,7 +71,6 @@ type
     procedure SetupStatsPanel;
     procedure SetupDescriptionPanel;
     procedure SetupEvolutionPanel;
-    procedure UpdateEvolutionChain(var AChain: TArray<TEvolutionNode>);
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
@@ -92,18 +89,20 @@ type
       'Por favor, informe o nome ou ID do Pok'#233'mon desejado.';
     MSG_NOT_AVAILABLE_DESCRIPTION =
       'Descri'#231#227'o n'#227'o dispon'#237'vel para esse Pok'#233'mon.';
+    MSG_NETWORK_ERROR =
+      'Erro de conex'#227'o. Verifique sua internet e tente novamente.';
     DARK_PANEL_ALPHA: TAlphaColor = $FF2A2A2A;
     DARK_PANEL_VCL: TColor = $002A2A2A;
     DESC_H = 60;
     FLAVOR_H = 80;
-    EVOLUTION_H = 200;
+    EVOLUTION_H = 230;
     SEARCH_H = 34;
     SEARCH_T = 7;
     SEARCH_W = 340;
     ICON_SIZE = 20;
     ICON_PAD = 8;
   public
-    { Public declarations }
+    procedure Initialize(const AService: IPokemonService);
   end;
 
 var
@@ -114,23 +113,18 @@ implementation
 {$R *.dfm}
 
 uses
-  Pokedex.Service.API,
   Winapi.ShellAPI,
   Winapi.ShlObj,
   Winapi.ActiveX,
   System.Win.ComObj;
 
-{ ---------- form ---------- }
-
 procedure TPokedexView.FormCreate(Sender: TObject);
 begin
-  // Resolve fonte: Montserrat se instalada, senao Segoe UI
   if Screen.Fonts.IndexOf(FONT_FAMILY) >= 0 then
     FFontName := FONT_FAMILY
   else
     FFontName := FONT_FALLBACK;
 
-  FController := TPokemonController.Create(dmPokeService);
   FThemeTextColor := TAlphaColors.Black;
   OnResize := FormResize;
   SetupLayout;
@@ -138,8 +132,6 @@ begin
   SetupStatsPanel;
   SetupDescriptionPanel;
   SetupEvolutionPanel;
-
-  PostMessage(Handle, WM_USER + 1, 0, 0);
   BASS_Init(-1, 44100, 0, Handle, nil);
 end;
 
@@ -149,11 +141,11 @@ begin
   pnlTopContainer.BringToFront;
 
   pnlImage.Align := alNone;
-  pnlImage.SetBounds(0, 0, 368, ClientHeight);
+  pnlImage.SetBounds(0, 0, 368, ClientHeight - EVOLUTION_H);
   pnlImage.Anchors := [akLeft, akTop, akBottom];
 
   pnlInfo.Align := alNone;
-  pnlInfo.SetBounds(368, 0, ClientWidth - 368, ClientHeight);
+  pnlInfo.SetBounds(368, 0, ClientWidth - 368, ClientHeight - EVOLUTION_H);
   pnlInfo.Anchors := [akLeft, akTop, akRight, akBottom];
 
   FDisplayNameLabel := TSkLabel.Create(Self);
@@ -167,8 +159,7 @@ begin
   FDisplayNameLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
 
   skImgPokemon.Align := alNone;
-  skImgPokemon.SetBounds(0, 95, pnlImage.Width,
-    pnlImage.Height - EVOLUTION_H - 100);
+  skImgPokemon.SetBounds(0, 95, pnlImage.Width, pnlImage.Height - 100);
   skImgPokemon.Anchors := [akLeft, akTop, akRight, akBottom];
 
   btnNext.Visible := False;
@@ -182,7 +173,6 @@ procedure TPokedexView.SetupSearchBar;
 var
   LEditLeft, LEditWidth: Integer;
 begin
-  // Container transparente — so agrupa e posiciona
   FSearchContainer := TPanel.Create(Self);
   FSearchContainer.Parent := pnlTopContainer;
   FSearchContainer.Width := SEARCH_W;
@@ -192,14 +182,11 @@ begin
   FSearchContainer.ParentBackground := True;
   CenterSearchBar;
 
-  // Camada 1: fundo arredondado via Skia (atras de tudo)
   FSearchBg := TSkPaintBox.Create(Self);
   FSearchBg.Parent := FSearchContainer;
   FSearchBg.Align := alClient;
   FSearchBg.OnDraw := DrawSearchBg;
 
-  // Camada 2: TEdit real — posicionado com margens para nao cobrir as bordas
-  // arredondadas nem a lupa
   LEditLeft := SEARCH_H div 2;
   LEditWidth := SEARCH_W - LEditLeft - (ICON_SIZE * 2) - (ICON_PAD * 3);
 
@@ -221,7 +208,6 @@ begin
   FSearchEdit.OnKeyPress := SearchEditKeyPress;
   FSearchEdit.BringToFront;
 
-  // Camada 3: icone de lupa (sobre tudo)
   FSearchIcon := TSkSvg.Create(Self);
   FSearchIcon.Parent := FSearchContainer;
   FSearchIcon.SetBounds(SEARCH_W - (ICON_SIZE * 2) - (ICON_PAD * 3),
@@ -237,7 +223,7 @@ begin
   FSearchIcon.BringToFront;
 
   FCryIcon := TSkSvg.Create(Self);
-  FCryIcon.Parent := FSearchContainer; // ← dentro da barra
+  FCryIcon.Parent := FSearchContainer;
   FCryIcon.SetBounds(SEARCH_W - ICON_SIZE - ICON_PAD, (SEARCH_H - ICON_SIZE)
     div 2, ICON_SIZE, ICON_SIZE);
   FCryIcon.Svg.Source :=
@@ -253,7 +239,6 @@ begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
 
-  // O painel escuro volta a descer até o rodapé do pnlInfo
   FStatsPanel.SetBounds(0, DESC_H, pnlInfo.Width, pnlInfo.Height - DESC_H);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
@@ -293,7 +278,6 @@ procedure TPokedexView.FormResize(Sender: TObject);
 begin
   CenterSearchBar;
 
-  // Atualiza a posição da label sempre que o painel ganhar seu tamanho real
   if Assigned(FDescLabel) and Assigned(pnlInfo) then
   begin
     FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
@@ -312,6 +296,7 @@ end;
 procedure TPokedexView.PlayCry;
 var
   LCryId: Integer;
+  LGen: Integer;
 begin
   if FCurrentId = 0 then
     Exit;
@@ -324,7 +309,10 @@ begin
   end;
   FreeAndNil(FCurrentStream);
 
+  Inc(FCryGeneration);
+  LGen   := FCryGeneration;
   LCryId := FCurrentId;
+
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -334,6 +322,12 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if LGen <> FCryGeneration then
+          begin
+            LStream.Free;
+            Exit;
+          end;
+
           if not Assigned(LStream) then
             Exit;
 
@@ -352,8 +346,7 @@ begin
   FDescLabel := TSkLabel.Create(Self);
   FDescLabel.Parent := pnlInfo;
 
-  // A VERDADE TÉCNICA: Travar o crescimento infinito obriga o Skia a quebrar a linha
-  FDescLabel.AutoSize := False;
+  FDescLabel.AutoSize := False; // Skia só quebra linha com largura fixa
   FDescLabel.Align := alNone;
 
   FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
@@ -366,8 +359,8 @@ end;
 procedure TPokedexView.SetupEvolutionPanel;
 begin
   FEvolutionPanel := TEvolutionPanel.Create(Self);
-  FEvolutionPanel.Parent := pnlImage;
-  FEvolutionPanel.SetBounds(0, pnlImage.Height - EVOLUTION_H, pnlImage.Width,
+  FEvolutionPanel.Parent := Self;
+  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
     EVOLUTION_H);
   FEvolutionPanel.Anchors := [akLeft, akRight, akBottom];
   FEvolutionPanel.FontFamily := FONT_FAMILY;
@@ -377,13 +370,10 @@ begin
     end;
 end;
 
-procedure TPokedexView.UpdateEvolutionChain(var AChain: TArray<TEvolutionNode>);
-var
-  I: Integer;
+procedure TPokedexView.Initialize(const AService: IPokemonService);
 begin
-  for I := 0 to High(AChain) do
-    AChain[I].IsActive := AChain[I].PokemonId = FCurrentId;
-  FEvolutionPanel.LoadChain(AChain);
+  FController := TPokemonController.Create(AService);
+  PostMessage(Handle, WM_USER + 1, 0, 0);
 end;
 
 procedure TPokedexView.WMAfterCreate(var Msg: TMessage);
@@ -534,22 +524,30 @@ begin
       LPokemon: TPokemon;
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
+      LErrorMsg: string;
     begin
       LPokemon := nil;
       LStream := nil;
+      LErrorMsg := '';
       SetLength(LChain, 0);
       try
         LPokemon := FController.ExecuteGetPokemon(AIdOrName);
-        if Assigned(LPokemon) then
-        begin
-          LStream := FController.DownloadFile(LPokemon.SpriteUrl);
-          if Assigned(LPokemon.SpeciesData) and
-            Assigned(LPokemon.SpeciesData.EvolutionChain) and
-            not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
-            LChain := FController.GetEvolutionChain
-              (LPokemon.SpeciesData.EvolutionChain.Url);
-        end;
+        LStream := FController.DownloadFile(LPokemon.SpriteUrl);
+        if Assigned(LPokemon.SpeciesData) and
+          Assigned(LPokemon.SpeciesData.EvolutionChain) and
+          not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
+          LChain := FController.GetEvolutionChain
+            (LPokemon.SpeciesData.EvolutionChain.Url);
       except
+        on E: EPokemonNotFound do
+          LErrorMsg := MSG_NOT_FOUND;
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := MSG_NOT_FOUND;
+      end;
+      if not LErrorMsg.IsEmpty then
+      begin
         FreeAndNil(LPokemon);
         FreeAndNil(LStream);
         SetLength(LChain, 0);
@@ -562,7 +560,9 @@ begin
           try
             if not Assigned(LPokemon) then
             begin
-              MessageDlg(MSG_NOT_FOUND, mtError, [mbOK], 0);
+              if LErrorMsg.IsEmpty then
+                LErrorMsg := MSG_NOT_FOUND;
+              MessageDlg(LErrorMsg, mtError, [mbOK], 0);
               Exit;
             end;
 
@@ -597,7 +597,8 @@ begin
             UpdatePokemonStats(LPokemon);
             UpdatePokemonTypes(LPokemon);
             UpdateFlavorText(LPokemon);
-            UpdateEvolutionChain(LChain);
+            FEvolutionPanel.LoadChain(
+              TPokemonController.FilterEvolutionChain(LChain, FCurrentId));
           finally
             FreeAndNil(LPokemon);
           end;
@@ -626,7 +627,6 @@ begin
   else
     LText := MSG_NOT_AVAILABLE_DESCRIPTION;
 
-  // 1. Configura a estilização global primeiro
   FDescLabel.TextSettings.Font.Size := 13;
   FDescLabel.TextSettings.FontColor := TAlphaColors.Whitesmoke;
   FDescLabel.TextSettings.Font.Slant := TSkFontComponent.TSkFontSlant.Italic;
@@ -635,7 +635,6 @@ begin
   FDescLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
   FDescLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
 
-  // 2. Só então injeta o texto
   FDescLabel.Caption := LText;
 end;
 
