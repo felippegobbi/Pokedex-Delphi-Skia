@@ -24,6 +24,7 @@ uses
   Pokedex.View.StatsPanel,
   Pokedex.View.EvolutionPanel,
   System.Types,
+  System.Math,
   Pokedex.Audio.Bass;
 
 type
