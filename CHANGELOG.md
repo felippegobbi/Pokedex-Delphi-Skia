@@ -16,6 +16,8 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - **`GetDescription`**: Agora aceita parâmetro `ALang: string = 'en'`. Itera todas as entradas sem interromper, mantendo a última correspondência por idioma (texto da versão de jogo mais recente é usado em vez do mais antigo).
 - **`POKEMON_MAX_ID = 1025`**: Generation IX Pokémon are now included in the random pool.
 - **`POKEMON_MAX_ID = 1025`**: Pokémon da Geração IX estão agora incluídos no sorteio aleatório.
+- **Responsive Evolution Panel**: Sprite sizes and font sizes in the evolution panel now scale dynamically with the number of nodes. Sprite cap increases from 72 px to 96 px in horizontal mode; vertical mode uses a dynamic cap (`Max(36, 72 - leafCount×4)`). Name font size is `LImgSize × 0.20` (clamped 8–14 px); trigger font size is `LImgSize × 0.16` (clamped 8–11 px).
+- **Painel de Evolução Responsivo**: Tamanhos de sprite e fonte no painel de evolução agora escalam dinamicamente com o número de nós. O cap do sprite aumenta de 72 px para 96 px no modo horizontal; o modo vertical usa um cap dinâmico (`Max(36, 72 - leafCount×4)`). O tamanho da fonte do nome é `LImgSize × 0.20` (limitado entre 8–14 px); o tamanho da fonte do gatilho é `LImgSize × 0.16` (limitado entre 8–11 px).
 
 ---
 
