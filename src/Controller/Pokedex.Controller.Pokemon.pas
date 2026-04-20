@@ -424,21 +424,19 @@ begin
     Exit;
   LLocale := string(LLocaleName);
   LPrimary := LLocale.Split(['-'])[0].ToLower;
-  case LPrimary of
-    'fr': Result := 'fr';
-    'de': Result := 'de';
-    'es': Result := 'es';
-    'it': Result := 'it';
-    'ja': Result := 'ja';
-    'ko': Result := 'ko';
-    'zh':
-      if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)
-        or LLocale.StartsWith('zh-HK', True) then
-        Result := 'zh-Hant'
-      else
-        Result := 'zh-Hans';
-  else
-    Result := 'en';
+  if LPrimary = 'fr' then Result := 'fr'
+  else if LPrimary = 'de' then Result := 'de'
+  else if LPrimary = 'es' then Result := 'es'
+  else if LPrimary = 'it' then Result := 'it'
+  else if LPrimary = 'ja' then Result := 'ja'
+  else if LPrimary = 'ko' then Result := 'ko'
+  else if LPrimary = 'zh' then
+  begin
+    if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)
+      or LLocale.StartsWith('zh-HK', True) then
+      Result := 'zh-Hant'
+    else
+      Result := 'zh-Hans';
   end;
 end;
 
