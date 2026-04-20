@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.0.0] - 2026-04-20
+
+### Added / Adicionado
+- **Shiny Sprite Toggle**: A `★ VER SHINY` / `★ VER NORMAL` label (`TSkLabel`) appears at the bottom of the image panel after a successful search. Clicking it swaps the sprite between the default and shiny variants via a background download, keeping the UI responsive.
+- **Toggle de Sprite Shiny**: Um label `★ VER SHINY` / `★ VER NORMAL` (`TSkLabel`) aparece na parte inferior do painel de imagem após uma busca bem-sucedida. Ao clicar, o sprite alterna entre a variante padrão e a shiny via download em background, mantendo a UI responsiva.
+- **Shiny Theme Color**: When the shiny sprite is active, the dominant color is extracted directly from the sprite pixels (`ExtractDominantColor`) in the background thread and applied to the UI theme via `ApplyTheme`. Toggling back to normal restores the species color from PokeAPI (`FSpeciesColor`).
+- **Cor de Tema Shiny**: Quando o sprite shiny está ativo, a cor dominante é extraída diretamente dos pixels do sprite (`ExtractDominantColor`) na thread de background e aplicada ao tema da UI via `ApplyTheme`. Ao voltar ao normal, a cor da espécie da PokeAPI é restaurada (`FSpeciesColor`).
+
+### Changed / Alterado
+- **Sprite Display Size**: `skImgPokemon` reduced from full panel width to a fixed `200×200 px` centered area (`SPRITE_SIZE = 200`), preventing the low-resolution PokeAPI sprites from looking blown up on screen.
+- **Tamanho de Exibição do Sprite**: `skImgPokemon` reduzido da largura total do painel para uma área fixa de `200×200 px` centralizada (`SPRITE_SIZE = 200`), evitando que os sprites de baixa resolução da PokeAPI aparecessem exageradamente aumentados na tela.
+
+### Fixed / Corrigido
+- **Shiny Click Intercepted by Image**: `skImgPokemon` (`TWinControl`) HWND covered `FShinyLabel`'s bounds, causing every click in that region to fire `ImgPokemonMouseDown` (cry) instead of the shiny toggle. Fixed by routing inside `ImgPokemonMouseDown`: if the click coordinates fall within `FShinyLabel`'s bounds, `ShinyIconClick` is called instead of `PlayCry`.
+- **Click no Shiny Interceptado pela Imagem**: O HWND de `skImgPokemon` (`TWinControl`) cobria os limites de `FShinyLabel`, fazendo com que todo clique naquela região disparasse `ImgPokemonMouseDown` (grito) em vez do toggle shiny. Corrigido com roteamento dentro de `ImgPokemonMouseDown`: se as coordenadas do click caírem dentro dos limites de `FShinyLabel`, `ShinyIconClick` é chamado no lugar de `PlayCry`.
+- **Hand Cursor on Image Panel**: Removed `crHandPoint` from `skImgPokemon`, which was causing the pointer cursor to appear over the entire image panel area. The speaker icon in the search bar provides sufficient affordance for the cry interaction.
+- **Cursor de Mão no Painel de Imagem**: Removido `crHandPoint` de `skImgPokemon`, que causava o aparecimento do cursor de ponteiro em toda a área do painel de imagem. O ícone de som na barra de busca já oferece indicação suficiente para a interação de grito.
+
+---
+
 ## [4.1.0] - 2026-04-20
 
 ### Fixed / Corrigido
