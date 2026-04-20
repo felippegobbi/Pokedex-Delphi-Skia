@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.1.1] - 2026-04-20
+
+### Fixed / Corrigido
+- **"VER SHINY" unreadable on light backgrounds**: The label now uses `FThemeTextColor` for its normal state (black on light backgrounds, white on dark) instead of hardcoded white. `ApplyTheme` also calls `UpdateShinyIcon` at the end so the color stays in sync when navigating between Pokémon.
+- **"VER SHINY" ilegível em fundos claros**: O label agora usa `FThemeTextColor` no estado normal (preto em fundos claros, branco em escuros) em vez de branco fixo. `ApplyTheme` também chama `UpdateShinyIcon` ao final para manter a cor sincronizada ao navegar entre Pokémon.
+- **Stat arcs indistinguishable on gray/dark backgrounds**: The unfilled arc opacity was raised from `$33` to `$55`. Bar color now receives a brightness boost when luminance < 200 (`Max(0, 200 − lum)` added to each RGB channel); below lum 60 gold is used, replacing the hardcoded `$FF2C2C2C` special-case in `StatsPanel`.
+- **Arcos de stat indistinguíveis em fundos cinza/escuros**: A opacidade do arco vazio subiu de `$33` para `$55`. A cor da barra agora recebe boost de brilho quando luminância < 200 (`Max(0, 200 − lum)` somado a cada canal RGB); abaixo de lum 60 usa dourado, substituindo o caso especial hardcoded `$FF2C2C2C` no `StatsPanel`.
+- **Unequal icon spacing**: Search bar icons (random, search, cry) are now positioned using `SEARCH_W − (ICON_PAD + ICON_SIZE) × N`, giving a uniform `ICON_PAD = 8 px` gap between all icons and edges.
+- **Espaçamento desigual dos ícones**: Os ícones da barra de busca (aleatório, pesquisar, ouvir) agora são posicionados com `SEARCH_W − (ICON_PAD + ICON_SIZE) × N`, garantindo gap uniforme de `ICON_PAD = 8 px` entre todos os ícones e bordas.
+- **Missing icon hints**: Added `Hint` + `ShowHint := True` to all three search bar icons: "Pokémon Aleatório", "Buscar Pokémon", "Ouvir Pokémon".
+- **Hints ausentes nos ícones**: Adicionado `Hint` + `ShowHint := True` nos três ícones da barra de busca: "Pokémon Aleatório", "Buscar Pokémon", "Ouvir Pokémon".
+
+---
+
 ## [5.1.0] - 2026-04-20
 
 ### Added / Adicionado
