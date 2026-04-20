@@ -175,7 +175,7 @@ begin
     LPaint.Style := TSkPaintStyle.Stroke;
     LPaint.StrokeWidth := ARC_STROKE;
     LPaint.StrokeCap := TSkStrokeCap.Round;
-    LPaint.Color := $33FFFFFF;
+    LPaint.Color := $55FFFFFF;
     ACanvas.DrawArc(LRect, -90, 360, False, LPaint);
 
     LSweep := 360 * (LStat.Value / MAX_STAT);

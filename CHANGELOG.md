@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.1.1] - 2026-04-20
+
+### Fixed / Corrigido
+- **"VER SHINY" unreadable on light backgrounds**: The label now uses `FThemeTextColor` for its normal state (black on light backgrounds, white on dark) instead of hardcoded white. `ApplyTheme` also calls `UpdateShinyIcon` at the end so the color stays in sync when navigating between Pokémon.
+- **"VER SHINY" ilegível em fundos claros**: O label agora usa `FThemeTextColor` no estado normal (preto em fundos claros, branco em escuros) em vez de branco fixo. `ApplyTheme` também chama `UpdateShinyIcon` ao final para manter a cor sincronizada ao navegar entre Pokémon.
+- **Stat arcs indistinguishable on gray/dark backgrounds**: The unfilled arc opacity was raised from `$33` to `$55`. Bar color now receives a brightness boost when luminance < 200 (`Max(0, 200 − lum)` added to each RGB channel); below lum 60 gold is used, replacing the hardcoded `$FF2C2C2C` special-case in `StatsPanel`.
+- **Arcos de stat indistinguíveis em fundos cinza/escuros**: A opacidade do arco vazio subiu de `$33` para `$55`. A cor da barra agora recebe boost de brilho quando luminância < 200 (`Max(0, 200 − lum)` somado a cada canal RGB); abaixo de lum 60 usa dourado, substituindo o caso especial hardcoded `$FF2C2C2C` no `StatsPanel`.
+- **Unequal icon spacing**: Search bar icons (random, search, cry) are now positioned using `SEARCH_W − (ICON_PAD + ICON_SIZE) × N`, giving a uniform `ICON_PAD = 8 px` gap between all icons and edges.
+- **Espaçamento desigual dos ícones**: Os ícones da barra de busca (aleatório, pesquisar, ouvir) agora são posicionados com `SEARCH_W − (ICON_PAD + ICON_SIZE) × N`, garantindo gap uniforme de `ICON_PAD = 8 px` entre todos os ícones e bordas.
+- **Missing icon hints**: Added `Hint` + `ShowHint := True` to all three search bar icons: "Pokémon Aleatório", "Buscar Pokémon", "Ouvir Pokémon".
+- **Hints ausentes nos ícones**: Adicionado `Hint` + `ShowHint := True` nos três ícones da barra de busca: "Pokémon Aleatório", "Buscar Pokémon", "Ouvir Pokémon".
+
+---
+
+## [5.1.0] - 2026-04-20
+
+### Added / Adicionado
+- **Random Pokémon Button**: A shuffle icon added to the search bar. Clicking it generates a random ID (1–1025) and loads a random Pokémon immediately.
+- **Botão de Pokémon Aleatório**: Ícone de shuffle adicionado na barra de busca. Ao clicar, gera um ID aleatório (1–1025) e carrega um Pokémon aleatório imediatamente.
+- **Windows Locale Flavor Text**: `GetPreferredLanguage` detects the system UI language via `GetUserDefaultLocaleName` and maps it to PokeAPI language codes (`fr`, `de`, `es`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, fallback `en`). The flavor text description is now shown in the OS language when available.
+- **Flavor Text no Idioma do Windows**: `GetPreferredLanguage` detecta o idioma da interface do sistema via `GetUserDefaultLocaleName` e mapeia para os códigos de idioma da PokeAPI (`fr`, `de`, `es`, `it`, `ja`, `ko`, `zh-Hans`, `zh-Hant`, fallback `en`). A descrição do flavor text agora é exibida no idioma do sistema quando disponível.
+
+### Changed / Alterado
+- **`GetDescription`**: Now accepts `ALang: string = 'en'` parameter. Iterates all entries without breaking, keeping the last match per language (most recent game version's text is used instead of the oldest).
+- **`GetDescription`**: Agora aceita parâmetro `ALang: string = 'en'`. Itera todas as entradas sem interromper, mantendo a última correspondência por idioma (texto da versão de jogo mais recente é usado em vez do mais antigo).
+- **`POKEMON_MAX_ID = 1025`**: Generation IX Pokémon are now included in the random pool.
+- **`POKEMON_MAX_ID = 1025`**: Pokémon da Geração IX estão agora incluídos no sorteio aleatório.
+- **Responsive Evolution Panel**: Sprite sizes and font sizes in the evolution panel now scale dynamically with the number of nodes. Sprite cap increases from 72 px to 96 px in horizontal mode; vertical mode uses a dynamic cap (`Max(36, 72 - leafCount×4)`). Name font size is `LImgSize × 0.20` (clamped 8–14 px); trigger font size is `LImgSize × 0.16` (clamped 8–11 px).
+- **Painel de Evolução Responsivo**: Tamanhos de sprite e fonte no painel de evolução agora escalam dinamicamente com o número de nós. O cap do sprite aumenta de 72 px para 96 px no modo horizontal; o modo vertical usa um cap dinâmico (`Max(36, 72 - leafCount×4)`). O tamanho da fonte do nome é `LImgSize × 0.20` (limitado entre 8–14 px); o tamanho da fonte do gatilho é `LImgSize × 0.16` (limitado entre 8–11 px).
+
+---
+
 ## [5.0.1] - 2026-04-20
 
 ### Fixed / Corrigido

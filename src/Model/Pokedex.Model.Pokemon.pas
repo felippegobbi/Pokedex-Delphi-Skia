@@ -98,7 +98,7 @@ type
       write FEvolutionChain;
     property Color: TApiResource read FColor write FColor;
 
-    function GetDescription: string;
+    function GetDescription(const ALang: string = 'en'): string;
   end;
 
   TPokemon = class
@@ -279,7 +279,7 @@ begin
   inherited;
 end;
 
-function TPokemonSpecies.GetDescription: string;
+function TPokemonSpecies.GetDescription(const ALang: string): string;
 var
   LEntry: TFlavorText;
   LBackupEn: string;
@@ -289,13 +289,9 @@ begin
 
   for LEntry in FFlavorEntries do
   begin
-    if (LEntry.Language.Name = 'pt-BR') or (LEntry.Language.Name = 'pt') then
-    begin
-      Result := LEntry.Text;
-      Break;
-    end;
-
-    if LEntry.Language.Name = 'en' then
+    if LEntry.Language.Name = ALang then
+      Result := LEntry.Text  // keep overwriting — last entry = most recent game
+    else if LEntry.Language.Name = 'en' then
       LBackupEn := LEntry.Text;
   end;
 

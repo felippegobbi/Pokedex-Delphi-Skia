@@ -247,6 +247,7 @@ var
   LUsableW, LUsableH: Single;
   LColW, LRowH, LLeafSlotW: Single;
   LImgSize, LTextW: Single;
+  LNameFontSize, LTriggerFontSize, LMaxImgV: Single;
   LPanelRect: TRectF;
   LPaint: ISkPaint;
   LIsLeaf: TArray<Boolean>;
@@ -328,8 +329,8 @@ begin
   if LUseHorizontal then
   begin
     LColW    := LUsableW / LNumStages;
-    LImgSize := Max(40.0, Min(72.0, LColW * 0.38));
-    LTextW   := Min(120.0, LColW - 8.0);
+    LImgSize := Max(48.0, Min(96.0, LColW * 0.42));
+    LTextW   := Min(140.0, LColW - 8.0);
     for I := 0 to LCount - 1 do
     begin
       LCx[I] := LPanelRect.Left + (FNodes[I].Stage + 0.5) * LColW;
@@ -374,8 +375,9 @@ begin
   begin
     LRowH      := LUsableH / LNumStages;
     LLeafSlotW := LUsableW / LLeafCount;
-    LImgSize   := Max(28.0, Min(52.0, Min(LRowH * 0.48, LLeafSlotW * 0.48)));
-    LTextW     := Min(100.0, LLeafSlotW - 8.0);
+    LMaxImgV   := Max(36.0, 72.0 - LLeafCount * 4.0);
+    LImgSize   := Max(28.0, Min(LMaxImgV, Min(LRowH * 0.55, LLeafSlotW * 0.55)));
+    LTextW     := Min(120.0, LLeafSlotW - 8.0);
 
     for I := 0 to LCount - 1 do
       LCy[I] := LPanelRect.Top + (FNodes[I].Stage + 0.5) * LRowH;
@@ -406,6 +408,9 @@ begin
             LCx[I] := LPanelRect.Left + LUsableW / 2;
         end;
   end;
+
+  LNameFontSize    := Max(8.0, Min(14.0, LImgSize * 0.20));
+  LTriggerFontSize := Max(8.0, Min(11.0, LImgSize * 0.16));
 
   SetLength(FNodeRects, LCount);
   for I := 0 to LCount - 1 do
@@ -565,7 +570,7 @@ begin
     LText := FormatTrigger(FNodes[I].Trigger);
     if LText.IsEmpty then
       Continue;
-    LParagraph := MakeParagraph(LText, 9, $BBFFFFFF, False);
+    LParagraph := MakeParagraph(LText, LTriggerFontSize, $BBFFFFFF, False);
     LParagraph.Layout(LTextW);
     LParagraph.Paint(ACanvas,
       LCx[I] - LTextW / 2,
@@ -604,7 +609,7 @@ begin
     else
       LNameColor := $AAFFFFFF;
 
-    LParagraph := MakeParagraph(FNodes[I].Name, 8, LNameColor, True);
+    LParagraph := MakeParagraph(FNodes[I].Name, LNameFontSize, LNameColor, True);
     LParagraph.Layout(LTextW);
     LParagraph.Paint(ACanvas, LCx[I] - LTextW / 2, LCy[I] + LImgSize / 2 + 2);
   end;
