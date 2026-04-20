@@ -56,6 +56,10 @@ type
     FEvolutionPanel: TEvolutionPanel;
     FDisplayNameLabel: TSkLabel;
     FThemeTextColor: TAlphaColor;
+    FIsShiny: Boolean;
+    FCurrentSpriteUrl: string;
+    FCurrentShinySpriteUrl: string;
+    FShinyIcon: TSkSvg;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -71,6 +75,10 @@ type
     procedure SetupStatsPanel;
     procedure SetupDescriptionPanel;
     procedure SetupEvolutionPanel;
+    procedure ShinyIconClick(Sender: TObject);
+    procedure UpdateShinyIcon;
+    procedure ReloadSprite;
+    function GetShinyIconSvg(const AActive: Boolean): string;
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
@@ -167,6 +175,16 @@ begin
 
   skImgPokemon.Cursor := crHandPoint;
   skImgPokemon.OnMouseDown := ImgPokemonMouseDown;
+
+  FShinyIcon := TSkSvg.Create(Self);
+  FShinyIcon.Parent := pnlImage;
+  FShinyIcon.SetBounds(pnlImage.Width - ICON_SIZE - ICON_PAD,
+    pnlImage.Height - ICON_SIZE - ICON_PAD, ICON_SIZE, ICON_SIZE);
+  FShinyIcon.Anchors := [akRight, akBottom];
+  FShinyIcon.Svg.Source := GetShinyIconSvg(False);
+  FShinyIcon.Cursor := crHandPoint;
+  FShinyIcon.OnClick := ShinyIconClick;
+  FShinyIcon.Visible := False;
 end;
 
 procedure TPokedexView.SetupSearchBar;
@@ -505,6 +523,65 @@ begin
   PlayCry;
 end;
 
+function TPokedexView.GetShinyIconSvg(const AActive: Boolean): string;
+const
+  PATH = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 ' +
+         '9.24l5.46 4.73L5.82 21z';
+begin
+  if AActive then
+    Result := '<svg viewBox="0 0 24 24"><path fill="#FFD700" d="' + PATH + '"/></svg>'
+  else
+    Result := '<svg viewBox="0 0 24 24"><path fill="white" opacity="0.45" d="' +
+              PATH + '"/></svg>';
+end;
+
+procedure TPokedexView.UpdateShinyIcon;
+begin
+  FShinyIcon.Svg.Source := GetShinyIconSvg(FIsShiny);
+end;
+
+procedure TPokedexView.ShinyIconClick(Sender: TObject);
+begin
+  FIsShiny := not FIsShiny;
+  UpdateShinyIcon;
+  ReloadSprite;
+end;
+
+procedure TPokedexView.ReloadSprite;
+var
+  LUrl: string;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  if FIsShiny and not FCurrentShinySpriteUrl.IsEmpty then
+    LUrl := FCurrentShinySpriteUrl
+  else
+    LUrl := FCurrentSpriteUrl;
+
+  if LUrl.IsEmpty then
+    Exit;
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LStream: TMemoryStream;
+    begin
+      LStream := FController.DownloadFile(LUrl);
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if not Assigned(LStream) then
+            Exit;
+          try
+            skImgPokemon.LoadFromStream(LStream);
+          finally
+            LStream.Free;
+          end;
+        end));
+    end).Start;
+end;
+
 procedure TPokedexView.PerformSearch(const AIdOrName: string);
 begin
   if Trim(AIdOrName).IsEmpty then
@@ -525,6 +602,7 @@ begin
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
       LErrorMsg: string;
+      LSpriteUrl: string;
     begin
       LPokemon := nil;
       LStream := nil;
@@ -532,7 +610,11 @@ begin
       SetLength(LChain, 0);
       try
         LPokemon := FController.ExecuteGetPokemon(AIdOrName);
-        LStream := FController.DownloadFile(LPokemon.SpriteUrl);
+        if FIsShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
+          LSpriteUrl := LPokemon.ShinySpriteUrl
+        else
+          LSpriteUrl := LPokemon.SpriteUrl;
+        LStream := FController.DownloadFile(LSpriteUrl);
         if Assigned(LPokemon.SpeciesData) and
           Assigned(LPokemon.SpeciesData.EvolutionChain) and
           not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
@@ -567,9 +649,13 @@ begin
             end;
 
             FCurrentId := LPokemon.Id;
+            FCurrentSpriteUrl := LPokemon.SpriteUrl;
+            FCurrentShinySpriteUrl := LPokemon.ShinySpriteUrl;
             FSearchEdit.Text := LPokemon.Name;
             btnNext.Visible := True;
             btnPrev.Visible := True;
+            FShinyIcon.Visible := True;
+            UpdateShinyIcon;
 
             if Assigned(LPokemon.SpeciesData) then
               ApplyTheme(TPokemonController.GetColorByString
