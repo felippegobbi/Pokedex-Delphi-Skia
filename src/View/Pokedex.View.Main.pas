@@ -310,10 +310,10 @@ begin
 
   skImgPokemon.SetBounds(LImgX, LImgY, SPRITE_SIZE, SPRITE_SIZE);
 
-  btnPrev.SetBounds(LImgX,
+  btnPrev.SetBounds(LImgX - btnPrev.Width,
     LImgY + (SPRITE_SIZE - btnPrev.Height) div 2,
     btnPrev.Width, btnPrev.Height);
-  btnNext.SetBounds(LImgX + SPRITE_SIZE - btnNext.Width,
+  btnNext.SetBounds(LImgX + SPRITE_SIZE,
     LImgY + (SPRITE_SIZE - btnNext.Height) div 2,
     btnNext.Width, btnNext.Height);
   btnPrev.BringToFront;
