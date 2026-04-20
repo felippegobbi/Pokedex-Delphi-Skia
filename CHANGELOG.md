@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [4.1.0] - 2026-04-20
+
+### Fixed / Corrigido
+- **PlayCry Race Condition**: Rapid clicks on the cry button now correctly discard stale download callbacks. A generation counter (`FCryGeneration`) ensures that only the most recent download writes to `FCurrentStream`; superseded streams are freed immediately, eliminating the memory leak and double-playback.
+- **Race Condition em PlayCry**: Cliques rápidos no botão de grito agora descartam corretamente callbacks de download obsoletos. Um contador de geração (`FCryGeneration`) garante que apenas o download mais recente escreva em `FCurrentStream`; streams substituídos são liberados imediatamente, eliminando o memory leak e a reprodução dupla.
+
+### Added / Adicionado
+- **Exception Hierarchy**: `EPokemonError` base class with `EPokemonNotFound`, `EPokemonNetworkError` and `EPokemonParseError` subclasses declared in `Pokedex.Service.Interfaces`. The service layer now raises typed exceptions (HTTP 404 → `EPokemonNotFound`, other non-200 / network failure → `EPokemonNetworkError`), the controller propagates them with `raise`, and the view shows distinct messages for each failure kind.
+- **Hierarquia de Exceções**: Classe base `EPokemonError` com subclasses `EPokemonNotFound`, `EPokemonNetworkError` e `EPokemonParseError` declaradas em `Pokedex.Service.Interfaces`. A camada de serviço agora levanta exceções tipadas (HTTP 404 → `EPokemonNotFound`, outros não-200 / falha de rede → `EPokemonNetworkError`), o controller as propaga com `raise`, e a view exibe mensagens distintas para cada tipo de falha.
+
+### Changed / Alterado
+- **MVC: Evolution Chain Filtering**: `UpdateEvolutionChain` (previously in `TPokedexView`) extracted to `TPokemonController.FilterEvolutionChain` as a class function. The view is now a single-line call-site with no filtering logic.
+- **MVC: Filtro da Cadeia Evolutiva**: `UpdateEvolutionChain` (anteriormente em `TPokedexView`) extraído para `TPokemonController.FilterEvolutionChain` como class function. A view ficou como um call-site de uma linha, sem lógica de filtragem.
+- **MVC: Service Injection**: `TPokedexView` no longer references `TdmPokeService` or `Pokedex.Service.API` directly. A new public `Initialize(AService: IPokemonService)` method receives the service via interface injection. `Pokedex.dpr` wires the two after `Application.CreateForm`.
+- **MVC: Injeção de Serviço**: `TPokedexView` não referencia mais `TdmPokeService` nem `Pokedex.Service.API` diretamente. Um novo método público `Initialize(AService: IPokemonService)` recebe o serviço via injeção de interface. O `Pokedex.dpr` conecta os dois após `Application.CreateForm`.
+- **Service Deduplication**: Three identical HTTP methods (`GetPokemonJSON`, `GetSpeciesJSON`, `GetEvolutionChainJSON`) collapsed into a single private `DoGet(AUrl)` helper.
+- **Deduplicação do Service**: Três métodos HTTP idênticos (`GetPokemonJSON`, `GetSpeciesJSON`, `GetEvolutionChainJSON`) consolidados em um único helper privado `DoGet(AUrl)`.
+- **Comment Cleanup**: Removed all comments describing *what* the code does. Retained only comments explaining non-obvious constraints (Skia line-wrap invariant, `EInvalidCast` on `TJSONNull`, baseline formula), PokeAPI contract quirks (nullable fields, `evolves_to` schema), magic-number documentation for layout constants, and the swallowed-exception rationale.
+- **Limpeza de Comentários**: Removidos todos os comentários que descrevem *o que* o código faz. Mantidos apenas comentários que explicam restrições não óbvias (invariante de quebra de linha do Skia, `EInvalidCast` em `TJSONNull`, fórmula de baseline), quirks do contrato da PokeAPI (campos nullable, schema do `evolves_to`), documentação de números mágicos de layout e a justificativa da exceção suprimida.
+
+---
+
 ## [4.0.0] - 2026-04-17
 
 ### Added / Adicionado
