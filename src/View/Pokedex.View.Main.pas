@@ -12,16 +12,13 @@ uses
   Vcl.Controls,
   Vcl.Forms,
   Vcl.Dialogs,
-  REST.Types,
-  REST.Client,
-  Data.Bind.Components,
-  Data.Bind.ObjectScope,
   Vcl.ExtCtrls,
   Vcl.StdCtrls,
   System.Skia,
   Vcl.Skia,
   Vcl.WinXCtrls,
   System.UITypes,
+  Pokedex.Service.Interfaces,
   Pokedex.Controller.Pokemon,
   Pokedex.Model.Pokemon,
   Pokedex.View.StatsPanel,
@@ -55,9 +52,15 @@ type
     FCryIcon: TSkSvg;
     FCurrentChannel: LongWord;
     FCurrentStream: TMemoryStream;
+    FCryGeneration: Integer;
     FEvolutionPanel: TEvolutionPanel;
     FDisplayNameLabel: TSkLabel;
     FThemeTextColor: TAlphaColor;
+    FIsShiny: Boolean;
+    FCurrentSpriteUrl: string;
+    FCurrentShinySpriteUrl: string;
+    FSpeciesColor: TColor;
+    FShinyLabel: TSkLabel;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -73,7 +76,11 @@ type
     procedure SetupStatsPanel;
     procedure SetupDescriptionPanel;
     procedure SetupEvolutionPanel;
-    procedure UpdateEvolutionChain(var AChain: TArray<TEvolutionNode>);
+    procedure ShinyIconClick(Sender: TObject);
+    procedure UpdateShinyIcon;
+    procedure ReloadSprite;
+    function ExtractDominantColor(AStream: TMemoryStream): TColor;
+    procedure CenterSprite;
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
@@ -92,18 +99,21 @@ type
       'Por favor, informe o nome ou ID do Pok'#233'mon desejado.';
     MSG_NOT_AVAILABLE_DESCRIPTION =
       'Descri'#231#227'o n'#227'o dispon'#237'vel para esse Pok'#233'mon.';
+    MSG_NETWORK_ERROR =
+      'Erro de conex'#227'o. Verifique sua internet e tente novamente.';
     DARK_PANEL_ALPHA: TAlphaColor = $FF2A2A2A;
     DARK_PANEL_VCL: TColor = $002A2A2A;
     DESC_H = 60;
     FLAVOR_H = 80;
-    EVOLUTION_H = 200;
+    EVOLUTION_H = 230;
     SEARCH_H = 34;
     SEARCH_T = 7;
     SEARCH_W = 340;
     ICON_SIZE = 20;
     ICON_PAD = 8;
+    SPRITE_SIZE = 200;
   public
-    { Public declarations }
+    procedure Initialize(const AService: IPokemonService);
   end;
 
 var
@@ -114,23 +124,18 @@ implementation
 {$R *.dfm}
 
 uses
-  Pokedex.Service.API,
   Winapi.ShellAPI,
   Winapi.ShlObj,
   Winapi.ActiveX,
   System.Win.ComObj;
 
-{ ---------- form ---------- }
-
 procedure TPokedexView.FormCreate(Sender: TObject);
 begin
-  // Resolve fonte: Montserrat se instalada, senao Segoe UI
   if Screen.Fonts.IndexOf(FONT_FAMILY) >= 0 then
     FFontName := FONT_FAMILY
   else
     FFontName := FONT_FALLBACK;
 
-  FController := TPokemonController.Create(dmPokeService);
   FThemeTextColor := TAlphaColors.Black;
   OnResize := FormResize;
   SetupLayout;
@@ -138,8 +143,6 @@ begin
   SetupStatsPanel;
   SetupDescriptionPanel;
   SetupEvolutionPanel;
-
-  PostMessage(Handle, WM_USER + 1, 0, 0);
   BASS_Init(-1, 44100, 0, Handle, nil);
 end;
 
@@ -149,11 +152,11 @@ begin
   pnlTopContainer.BringToFront;
 
   pnlImage.Align := alNone;
-  pnlImage.SetBounds(0, 0, 368, ClientHeight);
+  pnlImage.SetBounds(0, 0, 368, ClientHeight - EVOLUTION_H);
   pnlImage.Anchors := [akLeft, akTop, akBottom];
 
   pnlInfo.Align := alNone;
-  pnlInfo.SetBounds(368, 0, ClientWidth - 368, ClientHeight);
+  pnlInfo.SetBounds(368, 0, ClientWidth - 368, ClientHeight - EVOLUTION_H);
   pnlInfo.Anchors := [akLeft, akTop, akRight, akBottom];
 
   FDisplayNameLabel := TSkLabel.Create(Self);
@@ -167,22 +170,44 @@ begin
   FDisplayNameLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
 
   skImgPokemon.Align := alNone;
-  skImgPokemon.SetBounds(0, 95, pnlImage.Width,
-    pnlImage.Height - EVOLUTION_H - 100);
-  skImgPokemon.Anchors := [akLeft, akTop, akRight, akBottom];
+  skImgPokemon.Anchors := [akLeft, akTop];
+
+  // Re-parent buttons out of skImgPokemon (was clipping btnNext at X=297 in a 200px control)
+  btnNext.Parent := pnlImage;
+  btnPrev.Parent := pnlImage;
+
+  CenterSprite;
+
+  skImgPokemon.OnMouseDown := ImgPokemonMouseDown;
 
   btnNext.Visible := False;
   btnPrev.Visible := False;
 
-  skImgPokemon.Cursor := crHandPoint;
-  skImgPokemon.OnMouseDown := ImgPokemonMouseDown;
+  FShinyLabel := TSkLabel.Create(Self);
+  FShinyLabel.Parent := pnlImage;
+  FShinyLabel.AutoSize := False;
+  FShinyLabel.SetBounds((pnlImage.Width - 130) div 2,
+    pnlImage.Height - 30, 130, 22);
+  FShinyLabel.Anchors := [akLeft, akBottom];
+  FShinyLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
+  FShinyLabel.Caption := #$2605 + '  VER SHINY';
+  FShinyLabel.Cursor := crHandPoint;
+  FShinyLabel.OnClick := ShinyIconClick;
+  FShinyLabel.BringToFront;
+  FShinyLabel.Visible := False;
+  if FShinyLabel.Words.Count > 0 then
+  begin
+    FShinyLabel.Words[0].Font.Families := FFontName;
+    FShinyLabel.Words[0].Font.Size := 11;
+    FShinyLabel.Words[0].Font.Weight := TSkFontComponent.TSkFontWeight.Bold;
+    FShinyLabel.Words[0].FontColor := TAlphaColors.White;
+  end;
 end;
 
 procedure TPokedexView.SetupSearchBar;
 var
   LEditLeft, LEditWidth: Integer;
 begin
-  // Container transparente — so agrupa e posiciona
   FSearchContainer := TPanel.Create(Self);
   FSearchContainer.Parent := pnlTopContainer;
   FSearchContainer.Width := SEARCH_W;
@@ -192,14 +217,11 @@ begin
   FSearchContainer.ParentBackground := True;
   CenterSearchBar;
 
-  // Camada 1: fundo arredondado via Skia (atras de tudo)
   FSearchBg := TSkPaintBox.Create(Self);
   FSearchBg.Parent := FSearchContainer;
   FSearchBg.Align := alClient;
   FSearchBg.OnDraw := DrawSearchBg;
 
-  // Camada 2: TEdit real — posicionado com margens para nao cobrir as bordas
-  // arredondadas nem a lupa
   LEditLeft := SEARCH_H div 2;
   LEditWidth := SEARCH_W - LEditLeft - (ICON_SIZE * 2) - (ICON_PAD * 3);
 
@@ -221,7 +243,6 @@ begin
   FSearchEdit.OnKeyPress := SearchEditKeyPress;
   FSearchEdit.BringToFront;
 
-  // Camada 3: icone de lupa (sobre tudo)
   FSearchIcon := TSkSvg.Create(Self);
   FSearchIcon.Parent := FSearchContainer;
   FSearchIcon.SetBounds(SEARCH_W - (ICON_SIZE * 2) - (ICON_PAD * 3),
@@ -237,7 +258,7 @@ begin
   FSearchIcon.BringToFront;
 
   FCryIcon := TSkSvg.Create(Self);
-  FCryIcon.Parent := FSearchContainer; // ← dentro da barra
+  FCryIcon.Parent := FSearchContainer;
   FCryIcon.SetBounds(SEARCH_W - ICON_SIZE - ICON_PAD, (SEARCH_H - ICON_SIZE)
     div 2, ICON_SIZE, ICON_SIZE);
   FCryIcon.Svg.Source :=
@@ -253,7 +274,6 @@ begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
 
-  // O painel escuro volta a descer até o rodapé do pnlInfo
   FStatsPanel.SetBounds(0, DESC_H, pnlInfo.Width, pnlInfo.Height - DESC_H);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
@@ -280,6 +300,26 @@ begin
   end;
 end;
 
+procedure TPokedexView.CenterSprite;
+var
+  LImgX, LImgY, LAvailH: Integer;
+begin
+  LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
+  LAvailH := pnlImage.Height - 95 - 40; // from below name/types to above VER SHINY
+  LImgY := 95 + (LAvailH - SPRITE_SIZE) div 2;
+
+  skImgPokemon.SetBounds(LImgX, LImgY, SPRITE_SIZE, SPRITE_SIZE);
+
+  btnPrev.SetBounds(LImgX - btnPrev.Width,
+    LImgY + (SPRITE_SIZE - btnPrev.Height) div 2,
+    btnPrev.Width, btnPrev.Height);
+  btnNext.SetBounds(LImgX + SPRITE_SIZE,
+    LImgY + (SPRITE_SIZE - btnNext.Height) div 2,
+    btnNext.Width, btnNext.Height);
+  btnPrev.BringToFront;
+  btnNext.BringToFront;
+end;
+
 procedure TPokedexView.CenterSearchBar;
 begin
   if Assigned(FSearchContainer) then
@@ -292,8 +332,8 @@ end;
 procedure TPokedexView.FormResize(Sender: TObject);
 begin
   CenterSearchBar;
+  CenterSprite;
 
-  // Atualiza a posição da label sempre que o painel ganhar seu tamanho real
   if Assigned(FDescLabel) and Assigned(pnlInfo) then
   begin
     FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
@@ -304,14 +344,33 @@ end;
 
 procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  LShinyRect: TRect;
 begin
-  if Button = mbLeft then
-    PlayCry;
+  if Button <> mbLeft then
+    Exit;
+
+  if FShinyLabel.Visible then
+  begin
+    LShinyRect := Rect(
+      FShinyLabel.Left  - skImgPokemon.Left,
+      FShinyLabel.Top   - skImgPokemon.Top,
+      FShinyLabel.Left  + FShinyLabel.Width  - skImgPokemon.Left,
+      FShinyLabel.Top   + FShinyLabel.Height - skImgPokemon.Top);
+    if PtInRect(LShinyRect, Point(X, Y)) then
+    begin
+      ShinyIconClick(nil);
+      Exit;
+    end;
+  end;
+
+  PlayCry;
 end;
 
 procedure TPokedexView.PlayCry;
 var
   LCryId: Integer;
+  LGen: Integer;
 begin
   if FCurrentId = 0 then
     Exit;
@@ -324,7 +383,10 @@ begin
   end;
   FreeAndNil(FCurrentStream);
 
+  Inc(FCryGeneration);
+  LGen   := FCryGeneration;
   LCryId := FCurrentId;
+
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -334,6 +396,12 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if LGen <> FCryGeneration then
+          begin
+            LStream.Free;
+            Exit;
+          end;
+
           if not Assigned(LStream) then
             Exit;
 
@@ -352,8 +420,7 @@ begin
   FDescLabel := TSkLabel.Create(Self);
   FDescLabel.Parent := pnlInfo;
 
-  // A VERDADE TÉCNICA: Travar o crescimento infinito obriga o Skia a quebrar a linha
-  FDescLabel.AutoSize := False;
+  FDescLabel.AutoSize := False; // Skia só quebra linha com largura fixa
   FDescLabel.Align := alNone;
 
   FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
@@ -366,8 +433,8 @@ end;
 procedure TPokedexView.SetupEvolutionPanel;
 begin
   FEvolutionPanel := TEvolutionPanel.Create(Self);
-  FEvolutionPanel.Parent := pnlImage;
-  FEvolutionPanel.SetBounds(0, pnlImage.Height - EVOLUTION_H, pnlImage.Width,
+  FEvolutionPanel.Parent := Self;
+  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
     EVOLUTION_H);
   FEvolutionPanel.Anchors := [akLeft, akRight, akBottom];
   FEvolutionPanel.FontFamily := FONT_FAMILY;
@@ -377,13 +444,10 @@ begin
     end;
 end;
 
-procedure TPokedexView.UpdateEvolutionChain(var AChain: TArray<TEvolutionNode>);
-var
-  I: Integer;
+procedure TPokedexView.Initialize(const AService: IPokemonService);
 begin
-  for I := 0 to High(AChain) do
-    AChain[I].IsActive := AChain[I].PokemonId = FCurrentId;
-  FEvolutionPanel.LoadChain(AChain);
+  FController := TPokemonController.Create(AService);
+  PostMessage(Handle, WM_USER + 1, 0, 0);
 end;
 
 procedure TPokedexView.WMAfterCreate(var Msg: TMessage);
@@ -515,6 +579,118 @@ begin
   PlayCry;
 end;
 
+procedure TPokedexView.UpdateShinyIcon;
+begin
+  if FShinyLabel.Words.Count > 0 then
+  begin
+    if FIsShiny then
+    begin
+      FShinyLabel.Caption := #$2605 + '  VER NORMAL';
+      FShinyLabel.Words[0].FontColor := TAlphaColor($FFFFD700);
+    end
+    else
+    begin
+      FShinyLabel.Caption := #$2605 + '  VER SHINY';
+      FShinyLabel.Words[0].FontColor := TAlphaColors.White;
+    end;
+  end;
+end;
+
+procedure TPokedexView.ShinyIconClick(Sender: TObject);
+begin
+  FIsShiny := not FIsShiny;
+  UpdateShinyIcon;
+  ReloadSprite;
+end;
+
+procedure TPokedexView.ReloadSprite;
+var
+  LUrl: string;
+  LIsShiny: Boolean;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  LIsShiny := FIsShiny;
+  if LIsShiny and not FCurrentShinySpriteUrl.IsEmpty then
+    LUrl := FCurrentShinySpriteUrl
+  else
+    LUrl := FCurrentSpriteUrl;
+
+  if LUrl.IsEmpty then
+    Exit;
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LStream: TMemoryStream;
+      LThemeColor: TColor;
+    begin
+      LStream := FController.DownloadFile(LUrl);
+      if LIsShiny and Assigned(LStream) then
+      begin
+        LThemeColor := ExtractDominantColor(LStream);
+        LStream.Position := 0;
+      end
+      else
+        LThemeColor := FSpeciesColor;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          ApplyTheme(LThemeColor);
+          if not Assigned(LStream) then
+            Exit;
+          try
+            skImgPokemon.LoadFromStream(LStream);
+          finally
+            LStream.Free;
+          end;
+        end));
+    end).Start;
+end;
+
+function TPokedexView.ExtractDominantColor(AStream: TMemoryStream): TColor;
+var
+  LBytes: TBytes;
+  LImage: ISkImage;
+  LInfo: TSkImageInfo;
+  LPixels: TBytes;
+  I, R, G, B, Count: Integer;
+begin
+  Result := clBlack;
+  try
+    AStream.Position := 0;
+    SetLength(LBytes, AStream.Size);
+    AStream.Read(LBytes[0], Length(LBytes));
+    LImage := TSkImage.MakeFromEncoded(LBytes);
+    if not Assigned(LImage) or (LImage.Width = 0) then
+      Exit;
+    LInfo := TSkImageInfo.Create(LImage.Width, LImage.Height,
+      TSkColorType.RGBA8888, TSkAlphaType.Unpremul);
+    SetLength(LPixels, LImage.Width * LImage.Height * 4);
+    if not LImage.ReadPixels(LInfo, @LPixels[0], LImage.Width * 4) then
+      Exit;
+    R := 0; G := 0; B := 0; Count := 0;
+    I := 0;
+    while I <= Length(LPixels) - 4 do
+    begin
+      if LPixels[I + 3] > 128 then
+      begin
+        Inc(R, LPixels[I]);
+        Inc(G, LPixels[I + 1]);
+        Inc(B, LPixels[I + 2]);
+        Inc(Count);
+      end;
+      Inc(I, 4);
+    end;
+    if Count > 0 then
+      Result := RGB(R div Count, G div Count, B div Count);
+  except
+    Result := clBlack;
+  end;
+end;
+
 procedure TPokedexView.PerformSearch(const AIdOrName: string);
 begin
   if Trim(AIdOrName).IsEmpty then
@@ -534,22 +710,42 @@ begin
       LPokemon: TPokemon;
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
+      LErrorMsg: string;
+      LSpriteUrl: string;
+      LDominantColor: TColor;
     begin
       LPokemon := nil;
       LStream := nil;
+      LErrorMsg := '';
+      LDominantColor := 0;
       SetLength(LChain, 0);
       try
         LPokemon := FController.ExecuteGetPokemon(AIdOrName);
-        if Assigned(LPokemon) then
+        if FIsShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
+          LSpriteUrl := LPokemon.ShinySpriteUrl
+        else
+          LSpriteUrl := LPokemon.SpriteUrl;
+        LStream := FController.DownloadFile(LSpriteUrl);
+        if FIsShiny and Assigned(LStream) then
         begin
-          LStream := FController.DownloadFile(LPokemon.SpriteUrl);
-          if Assigned(LPokemon.SpeciesData) and
-            Assigned(LPokemon.SpeciesData.EvolutionChain) and
-            not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
-            LChain := FController.GetEvolutionChain
-              (LPokemon.SpeciesData.EvolutionChain.Url);
+          LDominantColor := ExtractDominantColor(LStream);
+          LStream.Position := 0;
         end;
+        if Assigned(LPokemon.SpeciesData) and
+          Assigned(LPokemon.SpeciesData.EvolutionChain) and
+          not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
+          LChain := FController.GetEvolutionChain
+            (LPokemon.SpeciesData.EvolutionChain.Url);
       except
+        on E: EPokemonNotFound do
+          LErrorMsg := MSG_NOT_FOUND;
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := MSG_NOT_FOUND;
+      end;
+      if not LErrorMsg.IsEmpty then
+      begin
         FreeAndNil(LPokemon);
         FreeAndNil(LStream);
         SetLength(LChain, 0);
@@ -562,18 +758,30 @@ begin
           try
             if not Assigned(LPokemon) then
             begin
-              MessageDlg(MSG_NOT_FOUND, mtError, [mbOK], 0);
+              if LErrorMsg.IsEmpty then
+                LErrorMsg := MSG_NOT_FOUND;
+              MessageDlg(LErrorMsg, mtError, [mbOK], 0);
               Exit;
             end;
 
             FCurrentId := LPokemon.Id;
+            FCurrentSpriteUrl := LPokemon.SpriteUrl;
+            FCurrentShinySpriteUrl := LPokemon.ShinySpriteUrl;
             FSearchEdit.Text := LPokemon.Name;
             btnNext.Visible := True;
             btnPrev.Visible := True;
+            FShinyLabel.Visible := True;
+            UpdateShinyIcon;
 
             if Assigned(LPokemon.SpeciesData) then
-              ApplyTheme(TPokemonController.GetColorByString
-                (LPokemon.SpeciesData.Color.Name));
+            begin
+              FSpeciesColor := TPokemonController.GetColorByString(
+                LPokemon.SpeciesData.Color.Name);
+              if FIsShiny and (LDominantColor <> 0) then
+                ApplyTheme(LDominantColor)
+              else
+                ApplyTheme(FSpeciesColor);
+            end;
 
             FDisplayNameLabel.Caption := UpperCase(LPokemon.Name);
             if FDisplayNameLabel.Words.Count > 0 then
@@ -597,7 +805,8 @@ begin
             UpdatePokemonStats(LPokemon);
             UpdatePokemonTypes(LPokemon);
             UpdateFlavorText(LPokemon);
-            UpdateEvolutionChain(LChain);
+            FEvolutionPanel.LoadChain(
+              TPokemonController.FilterEvolutionChain(LChain, FCurrentId));
           finally
             FreeAndNil(LPokemon);
           end;
@@ -626,7 +835,6 @@ begin
   else
     LText := MSG_NOT_AVAILABLE_DESCRIPTION;
 
-  // 1. Configura a estilização global primeiro
   FDescLabel.TextSettings.Font.Size := 13;
   FDescLabel.TextSettings.FontColor := TAlphaColors.Whitesmoke;
   FDescLabel.TextSettings.Font.Slant := TSkFontComponent.TSkFontSlant.Italic;
@@ -635,7 +843,6 @@ begin
   FDescLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
   FDescLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
 
-  // 2. Só então injeta o texto
   FDescLabel.Caption := LText;
 end;
 

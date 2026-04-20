@@ -51,8 +51,11 @@ type
   private
     [JSONName('front_default')]
     FFrontDefault: string;
+    [JSONName('front_shiny')]
+    FFrontShiny: string;
   public
     property FrontDefault: string read FFrontDefault write FFrontDefault;
+    property FrontShiny: string read FFrontShiny write FFrontShiny;
   end;
 
   TStatEntry = class
@@ -133,6 +136,7 @@ type
     property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
     property Stats: TArray<TStatEntry> read FStats write FStats;
     property SpriteUrl: string read GetSpriteUrl;
+    function ShinySpriteUrl: string;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -220,6 +224,14 @@ function TPokemon.GetSpriteUrl: string;
 begin
   if Assigned(FSprites) then
     Result := FSprites.FrontDefault
+  else
+    Result := '';
+end;
+
+function TPokemon.ShinySpriteUrl: string;
+begin
+  if Assigned(FSprites) then
+    Result := FSprites.FrontShiny
   else
     Result := '';
 end;

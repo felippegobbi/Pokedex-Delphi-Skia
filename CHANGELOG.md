@@ -3,6 +3,60 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.0.1] - 2026-04-20
+
+### Fixed / Corrigido
+- **Sprite centering**: `skImgPokemon` was positioned near the top of the image panel without vertical centering. New `CenterSprite` procedure positions the sprite equidistant between the type badges and the `★ VER SHINY` label, called from both `SetupLayout` and `FormResize`.
+- **Centralização do sprite**: `skImgPokemon` estava posicionado no topo do painel de imagem sem centralização vertical. Nova procedure `CenterSprite` posiciona o sprite equidistante entre os badges de tipo e o label `★ VER SHINY`, chamada em `SetupLayout` e `FormResize`.
+- **Next button invisible**: `btnNext` and `btnPrev` were children of `skImgPokemon` in the .dfm. After reducing the image control to `200×200 px`, `btnNext` at its original X=297 was outside the control's bounds and clipped. Both buttons are now re-parented to `pnlImage` and positioned at the sprite's left/right edges via `CenterSprite`.
+- **Botão próximo invisível**: `btnNext` e `btnPrev` eram filhos de `skImgPokemon` no .dfm. Após reduzir o controle de imagem para `200×200 px`, `btnNext` na posição original X=297 ficou fora dos limites do controle e era cortado. Ambos os botões agora são re-parentados para `pnlImage` e posicionados nas bordas laterais do sprite via `CenterSprite`.
+- **Shiny color on navigation**: Navigating to a new Pokémon while in shiny mode applied the species color (not the shiny dominant color). `PerformSearch` now runs `ExtractDominantColor` in the background thread whenever `FIsShiny` is true and applies the result instead of `FSpeciesColor`.
+- **Cor shiny na navegação**: Navegar para um novo Pokémon em modo shiny aplicava a cor da espécie (não a cor dominante do shiny). `PerformSearch` agora executa `ExtractDominantColor` na thread de background quando `FIsShiny` é verdadeiro e aplica o resultado em vez de `FSpeciesColor`.
+
+---
+
+## [5.0.0] - 2026-04-20
+
+### Added / Adicionado
+- **Shiny Sprite Toggle**: A `★ VER SHINY` / `★ VER NORMAL` label (`TSkLabel`) appears at the bottom of the image panel after a successful search. Clicking it swaps the sprite between the default and shiny variants via a background download, keeping the UI responsive.
+- **Toggle de Sprite Shiny**: Um label `★ VER SHINY` / `★ VER NORMAL` (`TSkLabel`) aparece na parte inferior do painel de imagem após uma busca bem-sucedida. Ao clicar, o sprite alterna entre a variante padrão e a shiny via download em background, mantendo a UI responsiva.
+- **Shiny Theme Color**: When the shiny sprite is active, the dominant color is extracted directly from the sprite pixels (`ExtractDominantColor`) in the background thread and applied to the UI theme via `ApplyTheme`. Toggling back to normal restores the species color from PokeAPI (`FSpeciesColor`).
+- **Cor de Tema Shiny**: Quando o sprite shiny está ativo, a cor dominante é extraída diretamente dos pixels do sprite (`ExtractDominantColor`) na thread de background e aplicada ao tema da UI via `ApplyTheme`. Ao voltar ao normal, a cor da espécie da PokeAPI é restaurada (`FSpeciesColor`).
+
+### Changed / Alterado
+- **Sprite Display Size**: `skImgPokemon` reduced from full panel width to a fixed `200×200 px` centered area (`SPRITE_SIZE = 200`), preventing the low-resolution PokeAPI sprites from looking blown up on screen.
+- **Tamanho de Exibição do Sprite**: `skImgPokemon` reduzido da largura total do painel para uma área fixa de `200×200 px` centralizada (`SPRITE_SIZE = 200`), evitando que os sprites de baixa resolução da PokeAPI aparecessem exageradamente aumentados na tela.
+
+### Fixed / Corrigido
+- **Shiny Click Intercepted by Image**: `skImgPokemon` (`TWinControl`) HWND covered `FShinyLabel`'s bounds, causing every click in that region to fire `ImgPokemonMouseDown` (cry) instead of the shiny toggle. Fixed by routing inside `ImgPokemonMouseDown`: if the click coordinates fall within `FShinyLabel`'s bounds, `ShinyIconClick` is called instead of `PlayCry`.
+- **Click no Shiny Interceptado pela Imagem**: O HWND de `skImgPokemon` (`TWinControl`) cobria os limites de `FShinyLabel`, fazendo com que todo clique naquela região disparasse `ImgPokemonMouseDown` (grito) em vez do toggle shiny. Corrigido com roteamento dentro de `ImgPokemonMouseDown`: se as coordenadas do click caírem dentro dos limites de `FShinyLabel`, `ShinyIconClick` é chamado no lugar de `PlayCry`.
+- **Hand Cursor on Image Panel**: Removed `crHandPoint` from `skImgPokemon`, which was causing the pointer cursor to appear over the entire image panel area. The speaker icon in the search bar provides sufficient affordance for the cry interaction.
+- **Cursor de Mão no Painel de Imagem**: Removido `crHandPoint` de `skImgPokemon`, que causava o aparecimento do cursor de ponteiro em toda a área do painel de imagem. O ícone de som na barra de busca já oferece indicação suficiente para a interação de grito.
+
+---
+
+## [4.1.0] - 2026-04-20
+
+### Fixed / Corrigido
+- **PlayCry Race Condition**: Rapid clicks on the cry button now correctly discard stale download callbacks. A generation counter (`FCryGeneration`) ensures that only the most recent download writes to `FCurrentStream`; superseded streams are freed immediately, eliminating the memory leak and double-playback.
+- **Race Condition em PlayCry**: Cliques rápidos no botão de grito agora descartam corretamente callbacks de download obsoletos. Um contador de geração (`FCryGeneration`) garante que apenas o download mais recente escreva em `FCurrentStream`; streams substituídos são liberados imediatamente, eliminando o memory leak e a reprodução dupla.
+
+### Added / Adicionado
+- **Exception Hierarchy**: `EPokemonError` base class with `EPokemonNotFound`, `EPokemonNetworkError` and `EPokemonParseError` subclasses declared in `Pokedex.Service.Interfaces`. The service layer now raises typed exceptions (HTTP 404 → `EPokemonNotFound`, other non-200 / network failure → `EPokemonNetworkError`), the controller propagates them with `raise`, and the view shows distinct messages for each failure kind.
+- **Hierarquia de Exceções**: Classe base `EPokemonError` com subclasses `EPokemonNotFound`, `EPokemonNetworkError` e `EPokemonParseError` declaradas em `Pokedex.Service.Interfaces`. A camada de serviço agora levanta exceções tipadas (HTTP 404 → `EPokemonNotFound`, outros não-200 / falha de rede → `EPokemonNetworkError`), o controller as propaga com `raise`, e a view exibe mensagens distintas para cada tipo de falha.
+
+### Changed / Alterado
+- **MVC: Evolution Chain Filtering**: `UpdateEvolutionChain` (previously in `TPokedexView`) extracted to `TPokemonController.FilterEvolutionChain` as a class function. The view is now a single-line call-site with no filtering logic.
+- **MVC: Filtro da Cadeia Evolutiva**: `UpdateEvolutionChain` (anteriormente em `TPokedexView`) extraído para `TPokemonController.FilterEvolutionChain` como class function. A view ficou como um call-site de uma linha, sem lógica de filtragem.
+- **MVC: Service Injection**: `TPokedexView` no longer references `TdmPokeService` or `Pokedex.Service.API` directly. A new public `Initialize(AService: IPokemonService)` method receives the service via interface injection. `Pokedex.dpr` wires the two after `Application.CreateForm`.
+- **MVC: Injeção de Serviço**: `TPokedexView` não referencia mais `TdmPokeService` nem `Pokedex.Service.API` diretamente. Um novo método público `Initialize(AService: IPokemonService)` recebe o serviço via injeção de interface. O `Pokedex.dpr` conecta os dois após `Application.CreateForm`.
+- **Service Deduplication**: Three identical HTTP methods (`GetPokemonJSON`, `GetSpeciesJSON`, `GetEvolutionChainJSON`) collapsed into a single private `DoGet(AUrl)` helper.
+- **Deduplicação do Service**: Três métodos HTTP idênticos (`GetPokemonJSON`, `GetSpeciesJSON`, `GetEvolutionChainJSON`) consolidados em um único helper privado `DoGet(AUrl)`.
+- **Comment Cleanup**: Removed all comments describing *what* the code does. Retained only comments explaining non-obvious constraints (Skia line-wrap invariant, `EInvalidCast` on `TJSONNull`, baseline formula), PokeAPI contract quirks (nullable fields, `evolves_to` schema), magic-number documentation for layout constants, and the swallowed-exception rationale.
+- **Limpeza de Comentários**: Removidos todos os comentários que descrevem *o que* o código faz. Mantidos apenas comentários que explicam restrições não óbvias (invariante de quebra de linha do Skia, `EInvalidCast` em `TJSONNull`, fórmula de baseline), quirks do contrato da PokeAPI (campos nullable, schema do `evolves_to`), documentação de números mágicos de layout e a justificativa da exceção suprimida.
+
+---
+
 ## [4.0.0] - 2026-04-17
 
 ### Added / Adicionado

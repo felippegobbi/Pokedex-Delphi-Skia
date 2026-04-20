@@ -27,6 +27,8 @@ type
     function ExecuteGetPokemon(const AIdOrName: string): TPokemon;
     function DownloadFile(const AUrl: string): TMemoryStream;
     function GetEvolutionChain(const AUrl: string): TArray<TEvolutionNode>;
+    class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
+      const AActivePokemonId: Integer): TArray<TEvolutionNode>;
     class function FormatMetric(const AValue: Integer;
       const AUnit: string): string;
     class function GetCryUrl(const AId: Integer): string;
@@ -187,7 +189,6 @@ var
     SetLength(Result, Length(Result) + 1);
     Result[High(Result)] := LNode;
 
-    // evolves_to: percorre todos os filhos (branching como Eevee)
     LEvolvesToVal := ALink.GetValue('evolves_to');
     if not (Assigned(LEvolvesToVal) and (LEvolvesToVal is TJSONArray)) then
       Exit;
@@ -228,27 +229,125 @@ begin
   try
     LContent := FService.GetPokemonJSON(AIdOrName);
 
-    if (not LContent.IsEmpty) and (LContent.StartsWith('{')) then
-    begin
-      Result := TJson.JsonToObject<TPokemon>(LContent);
+    if LContent.IsEmpty or not LContent.StartsWith('{') then
+      raise EPokemonParseError.Create('Resposta inv'#225'lida da API');
 
-      if Assigned(Result) and Assigned(Result.Species) then
-      begin
-        LSpeciesContent := FService.GetSpeciesJSON(Result.Species.Url);
-        if not LSpeciesContent.IsEmpty then
-          Result.SpeciesData := TJson.JsonToObject<TPokemonSpecies>
-            (LSpeciesContent);
-      end;
+    Result := TJson.JsonToObject<TPokemon>(LContent);
+    if not Assigned(Result) then
+      raise EPokemonParseError.Create('N'#227'o foi poss'#237'vel processar os dados do Pok'#233'mon');
+
+    if Assigned(Result.Species) then
+    try
+      LSpeciesContent := FService.GetSpeciesJSON(Result.Species.Url);
+      if not LSpeciesContent.IsEmpty then
+        Result.SpeciesData := TJson.JsonToObject<TPokemonSpecies>(LSpeciesContent);
+    except
+      on EPokemonError do ; // species data is non-critical; partial result is acceptable
     end;
   except
+    on E: EPokemonError do
+    begin
+      FreeAndNil(Result);
+      raise;
+    end;
     on E: Exception do
     begin
-      if Assigned(Result) then
-        FreeAndNil(Result);
+      FreeAndNil(Result);
+      raise EPokemonParseError.Create(E.Message);
     end;
   end;
 end;
 
+
+class function TPokemonController.FilterEvolutionChain(
+  const AChain: TArray<TEvolutionNode>;
+  const AActivePokemonId: Integer): TArray<TEvolutionNode>;
+var
+  I: Integer;
+  LChain: TArray<TEvolutionNode>;
+  LActiveIdx: Integer;
+  LInclude: TArray<Integer>;
+  LParentId: Integer;
+  LFound: Boolean;
+
+  procedure AddInclude(AId: Integer);
+  var J: Integer;
+  begin
+    for J := 0 to High(LInclude) do
+      if LInclude[J] = AId then Exit;
+    SetLength(LInclude, Length(LInclude) + 1);
+    LInclude[High(LInclude)] := AId;
+  end;
+
+  function InInclude(AId: Integer): Boolean;
+  var J: Integer;
+  begin
+    for J := 0 to High(LInclude) do
+      if LInclude[J] = AId then Exit(True);
+    Result := False;
+  end;
+
+  procedure AddSubtree(AParentId: Integer);
+  var J: Integer;
+  begin
+    for J := 0 to High(LChain) do
+      if LChain[J].ParentId = AParentId then
+      begin
+        AddInclude(LChain[J].PokemonId);
+        AddSubtree(LChain[J].PokemonId);
+      end;
+  end;
+
+begin
+  SetLength(LChain, Length(AChain));
+  for I := 0 to High(AChain) do
+  begin
+    LChain[I]          := AChain[I];
+    LChain[I].IsActive := LChain[I].PokemonId = AActivePokemonId;
+  end;
+
+  LActiveIdx := -1;
+  for I := 0 to High(LChain) do
+    if LChain[I].IsActive then
+    begin
+      LActiveIdx := I;
+      Break;
+    end;
+
+  if LActiveIdx < 0 then
+  begin
+    Result := LChain;
+    Exit;
+  end;
+
+  SetLength(LInclude, 0);
+  AddInclude(LChain[LActiveIdx].PokemonId);
+
+  LParentId := LChain[LActiveIdx].ParentId;
+  while LParentId <> 0 do
+  begin
+    AddInclude(LParentId);
+    LFound := False;
+    for I := 0 to High(LChain) do
+      if LChain[I].PokemonId = LParentId then
+      begin
+        LParentId := LChain[I].ParentId;
+        LFound    := True;
+        Break;
+      end;
+    if not LFound then Break;
+  end;
+
+  AddSubtree(LChain[LActiveIdx].PokemonId);
+
+  SetLength(Result, 0);
+  for I := 0 to High(LChain) do
+    if InInclude(LChain[I].PokemonId) then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := LChain[I];
+    end;
+end;
 
 class function TPokemonController.FormatMetric(const AValue: Integer;
   const AUnit: string): string;

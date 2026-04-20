@@ -18,5 +18,6 @@ begin
   Application.MainFormOnTaskbar := True;
   Application.CreateForm(TdmPokeService, dmPokeService);
   Application.CreateForm(TPokedexView, PokedexView);
+  PokedexView.Initialize(dmPokeService);
   Application.Run;
 end.
