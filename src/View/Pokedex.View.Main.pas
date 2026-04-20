@@ -226,7 +226,7 @@ begin
   FSearchBg.OnDraw := DrawSearchBg;
 
   LEditLeft := SEARCH_H div 2;
-  LEditWidth := SEARCH_W - LEditLeft - (ICON_SIZE * 3) - (ICON_PAD * 4);
+  LEditWidth := SEARCH_W - LEditLeft - (ICON_PAD + ICON_SIZE) * 3 - ICON_PAD;
 
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent := FSearchContainer;
@@ -248,7 +248,7 @@ begin
 
   FSearchIcon := TSkSvg.Create(Self);
   FSearchIcon.Parent := FSearchContainer;
-  FSearchIcon.SetBounds(SEARCH_W - (ICON_SIZE * 2) - (ICON_PAD * 3),
+  FSearchIcon.SetBounds(SEARCH_W - (ICON_PAD + ICON_SIZE) * 2,
     (SEARCH_H - ICON_SIZE) div 2, ICON_SIZE, ICON_SIZE);
   FSearchIcon.Anchors := [akTop, akRight];
   FSearchIcon.Svg.Source :=
@@ -257,23 +257,27 @@ begin
     ' 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5' +
     ' 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
   FSearchIcon.Cursor := crHandPoint;
+  FSearchIcon.Hint := 'Buscar Pok'#233'mon';
+  FSearchIcon.ShowHint := True;
   FSearchIcon.OnClick := SearchIconClick;
   FSearchIcon.BringToFront;
 
   FCryIcon := TSkSvg.Create(Self);
   FCryIcon.Parent := FSearchContainer;
-  FCryIcon.SetBounds(SEARCH_W - ICON_SIZE - ICON_PAD, (SEARCH_H - ICON_SIZE)
+  FCryIcon.SetBounds(SEARCH_W - ICON_PAD - ICON_SIZE, (SEARCH_H - ICON_SIZE)
     div 2, ICON_SIZE, ICON_SIZE);
   FCryIcon.Svg.Source :=
     '<svg viewBox="0 0 24 24"><path fill="white" d="M3 9v6h4l5 5V4L7 9H3z' +
     'M16.5 12A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
   FCryIcon.Cursor := crHandPoint;
+  FCryIcon.Hint := 'Ouvir Pok'#233'mon';
+  FCryIcon.ShowHint := True;
   FCryIcon.OnClick := CryIconClick;
   FCryIcon.BringToFront;
 
   FRandomIcon := TSkSvg.Create(Self);
   FRandomIcon.Parent := FSearchContainer;
-  FRandomIcon.SetBounds(SEARCH_W - (ICON_SIZE * 3) - (ICON_PAD * 4),
+  FRandomIcon.SetBounds(SEARCH_W - (ICON_PAD + ICON_SIZE) * 3,
     (SEARCH_H - ICON_SIZE) div 2, ICON_SIZE, ICON_SIZE);
   FRandomIcon.Anchors := [akTop, akRight];
   FRandomIcon.Svg.Source :=
@@ -282,6 +286,8 @@ begin
     'V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3' +
     '.13z"/></svg>';
   FRandomIcon.Cursor := crHandPoint;
+  FRandomIcon.Hint := 'Pok'#233'mon Aleat'#243'rio';
+  FRandomIcon.ShowHint := True;
   FRandomIcon.OnClick := RandomIconClick;
   FRandomIcon.BringToFront;
 end;
@@ -489,6 +495,7 @@ var
   LEffectiveColor: TColor;
   LLum: Integer;
   LAlphaColor: TAlphaColor;
+  LBoost, LBarR, LBarG, LBarB: Integer;
 begin
   LLum := (GetRValue(AColor) * 299 + GetGValue(AColor) * 587 + GetBValue(AColor)
     * 114) div 1000;
@@ -498,7 +505,7 @@ begin
     LEffectiveColor := $00F0F0F0;
     FThemeTextColor := TAlphaColors.Black;
   end
-  else if AColor = TPokemonController.BLACK_COLOR then
+  else if LLum < 60 then
   begin
     LEffectiveColor := AColor;
     FThemeTextColor := TAlphaColors.White;
@@ -522,11 +529,26 @@ begin
     (DWORD(GetGValue(LEffectiveColor)) shl 8) or
     DWORD(GetBValue(LEffectiveColor));
 
-  FStatsPanel.BarColor := LAlphaColor;
   FEvolutionPanel.ThemeColor := LAlphaColor;
+
+  // Boost bar color so it always contrasts against the dark stats panel background
+  if LLum < 60 then
+    FStatsPanel.BarColor := $FFFFD700
+  else
+  begin
+    LBoost := Max(0, 200 - LLum);
+    LBarR := Min(255, GetRValue(LEffectiveColor) + LBoost);
+    LBarG := Min(255, GetGValue(LEffectiveColor) + LBoost);
+    LBarB := Min(255, GetBValue(LEffectiveColor) + LBoost);
+    FStatsPanel.BarColor := $FF000000 or (DWORD(LBarR) shl 16) or
+      (DWORD(LBarG) shl 8) or DWORD(LBarB);
+  end;
 
   FStatsPanel.Redraw;
   FEvolutionPanel.Redraw;
+
+  if Assigned(FShinyLabel) and FShinyLabel.Visible then
+    UpdateShinyIcon;
 end;
 
 procedure TPokedexView.SearchIconClick(Sender: TObject);
@@ -613,7 +635,7 @@ begin
     else
     begin
       FShinyLabel.Caption := #$2605 + '  VER SHINY';
-      FShinyLabel.Words[0].FontColor := TAlphaColors.White;
+      FShinyLabel.Words[0].FontColor := FThemeTextColor;
     end;
   end;
 end;
