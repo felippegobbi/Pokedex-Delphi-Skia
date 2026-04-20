@@ -80,6 +80,7 @@ type
     procedure UpdateShinyIcon;
     procedure ReloadSprite;
     function ExtractDominantColor(AStream: TMemoryStream): TColor;
+    procedure CenterSprite;
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
@@ -169,14 +170,18 @@ begin
   FDisplayNameLabel.TextSettings.VertAlign := TSkTextVertAlign.Center;
 
   skImgPokemon.Align := alNone;
-  skImgPokemon.SetBounds((pnlImage.Width - SPRITE_SIZE) div 2, 95,
-    SPRITE_SIZE, SPRITE_SIZE);
   skImgPokemon.Anchors := [akLeft, akTop];
+
+  // Re-parent buttons out of skImgPokemon (was clipping btnNext at X=297 in a 200px control)
+  btnNext.Parent := pnlImage;
+  btnPrev.Parent := pnlImage;
+
+  CenterSprite;
+
+  skImgPokemon.OnMouseDown := ImgPokemonMouseDown;
 
   btnNext.Visible := False;
   btnPrev.Visible := False;
-
-  skImgPokemon.OnMouseDown := ImgPokemonMouseDown;
 
   FShinyLabel := TSkLabel.Create(Self);
   FShinyLabel.Parent := pnlImage;
@@ -295,6 +300,26 @@ begin
   end;
 end;
 
+procedure TPokedexView.CenterSprite;
+var
+  LImgX, LImgY, LAvailH: Integer;
+begin
+  LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
+  LAvailH := pnlImage.Height - 95 - 40; // from below name/types to above VER SHINY
+  LImgY := 95 + (LAvailH - SPRITE_SIZE) div 2;
+
+  skImgPokemon.SetBounds(LImgX, LImgY, SPRITE_SIZE, SPRITE_SIZE);
+
+  btnPrev.SetBounds(LImgX,
+    LImgY + (SPRITE_SIZE - btnPrev.Height) div 2,
+    btnPrev.Width, btnPrev.Height);
+  btnNext.SetBounds(LImgX + SPRITE_SIZE - btnNext.Width,
+    LImgY + (SPRITE_SIZE - btnNext.Height) div 2,
+    btnNext.Width, btnNext.Height);
+  btnPrev.BringToFront;
+  btnNext.BringToFront;
+end;
+
 procedure TPokedexView.CenterSearchBar;
 begin
   if Assigned(FSearchContainer) then
@@ -307,6 +332,7 @@ end;
 procedure TPokedexView.FormResize(Sender: TObject);
 begin
   CenterSearchBar;
+  CenterSprite;
 
   if Assigned(FDescLabel) and Assigned(pnlInfo) then
   begin
@@ -686,10 +712,12 @@ begin
       LChain: TArray<TEvolutionNode>;
       LErrorMsg: string;
       LSpriteUrl: string;
+      LDominantColor: TColor;
     begin
       LPokemon := nil;
       LStream := nil;
       LErrorMsg := '';
+      LDominantColor := 0;
       SetLength(LChain, 0);
       try
         LPokemon := FController.ExecuteGetPokemon(AIdOrName);
@@ -698,6 +726,11 @@ begin
         else
           LSpriteUrl := LPokemon.SpriteUrl;
         LStream := FController.DownloadFile(LSpriteUrl);
+        if FIsShiny and Assigned(LStream) then
+        begin
+          LDominantColor := ExtractDominantColor(LStream);
+          LStream.Position := 0;
+        end;
         if Assigned(LPokemon.SpeciesData) and
           Assigned(LPokemon.SpeciesData.EvolutionChain) and
           not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
@@ -744,7 +777,10 @@ begin
             begin
               FSpeciesColor := TPokemonController.GetColorByString(
                 LPokemon.SpeciesData.Color.Name);
-              ApplyTheme(FSpeciesColor);
+              if FIsShiny and (LDominantColor <> 0) then
+                ApplyTheme(LDominantColor)
+              else
+                ApplyTheme(FSpeciesColor);
             end;
 
             FDisplayNameLabel.Caption := UpperCase(LPokemon.Name);

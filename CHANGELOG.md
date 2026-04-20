@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.0.1] - 2026-04-20
+
+### Fixed / Corrigido
+- **Sprite centering**: `skImgPokemon` was positioned near the top of the image panel without vertical centering. New `CenterSprite` procedure positions the sprite equidistant between the type badges and the `★ VER SHINY` label, called from both `SetupLayout` and `FormResize`.
+- **Centralização do sprite**: `skImgPokemon` estava posicionado no topo do painel de imagem sem centralização vertical. Nova procedure `CenterSprite` posiciona o sprite equidistante entre os badges de tipo e o label `★ VER SHINY`, chamada em `SetupLayout` e `FormResize`.
+- **Next button invisible**: `btnNext` and `btnPrev` were children of `skImgPokemon` in the .dfm. After reducing the image control to `200×200 px`, `btnNext` at its original X=297 was outside the control's bounds and clipped. Both buttons are now re-parented to `pnlImage` and positioned at the sprite's left/right edges via `CenterSprite`.
+- **Botão próximo invisível**: `btnNext` e `btnPrev` eram filhos de `skImgPokemon` no .dfm. Após reduzir o controle de imagem para `200×200 px`, `btnNext` na posição original X=297 ficou fora dos limites do controle e era cortado. Ambos os botões agora são re-parentados para `pnlImage` e posicionados nas bordas laterais do sprite via `CenterSprite`.
+- **Shiny color on navigation**: Navigating to a new Pokémon while in shiny mode applied the species color (not the shiny dominant color). `PerformSearch` now runs `ExtractDominantColor` in the background thread whenever `FIsShiny` is true and applies the result instead of `FSpeciesColor`.
+- **Cor shiny na navegação**: Navegar para um novo Pokémon em modo shiny aplicava a cor da espécie (não a cor dominante do shiny). `PerformSearch` agora executa `ExtractDominantColor` na thread de background quando `FIsShiny` é verdadeiro e aplica o resultado em vez de `FSpeciesColor`.
+
+---
+
 ## [5.0.0] - 2026-04-20
 
 ### Added / Adicionado
