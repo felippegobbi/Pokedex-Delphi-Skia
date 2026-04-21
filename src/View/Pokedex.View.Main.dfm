@@ -29,7 +29,7 @@ object PokedexView: TPokedexView
     Left = 0
     Top = 48
     Width = 368
-    Height = 532
+    Height = 632
     Align = alLeft
     BevelOuter = bvNone
     Padding.Left = 10
@@ -82,13 +82,14 @@ object PokedexView: TPokedexView
   object pnlInfo: TRelativePanel
     Left = 368
     Top = 48
-    Width = 335
-    Height = 532
+    Width = 432
+    Height = 632
     ControlCollection = <>
     Align = alClient
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 2
+    ExplicitWidth = 335
     ExplicitHeight = 472
   end
 end

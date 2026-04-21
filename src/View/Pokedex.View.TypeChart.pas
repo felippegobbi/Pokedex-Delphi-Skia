@@ -24,7 +24,9 @@ type
     FFontFamily: string;
     procedure DrawChart(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
-    function MakeTypeface: ISkTypeface;
+    function MakeParagraph(const AText: string; AFontSize: Single;
+      AColor: TAlphaColor; ABold: Boolean;
+      AAlign: TSkTextAlign = TSkTextAlign.Left): ISkParagraph;
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadEffects(const AEffects: TArray<TTypeEffect>);
@@ -35,12 +37,12 @@ type
 implementation
 
 const
-  PANEL_PAD = 10;
+  PANEL_PAD = 14;
   DARK_BG: TAlphaColor = $FF2A2A2A;
   BADGE_H = 17;
   BADGE_R = 3.5;
   BADGE_X = 5;
-  ROW_H   = 23;
+  ROW_H   = 22;
   MULT_W  = 34;
 
 constructor TTypeChartPanel.Create(AOwner: TComponent);
@@ -58,14 +60,37 @@ begin
   Redraw;
 end;
 
-function TTypeChartPanel.MakeTypeface: ISkTypeface;
+function TTypeChartPanel.MakeParagraph(const AText: string; AFontSize: Single;
+  AColor: TAlphaColor; ABold: Boolean; AAlign: TSkTextAlign): ISkParagraph;
+var
+  LParaStyle: ISkParagraphStyle;
+  LTextStyle: ISkTextStyle;
+  LBuilder: ISkParagraphBuilder;
 begin
+  LParaStyle := TSkParagraphStyle.Create;
+  LParaStyle.MaxLines  := 1;
+  LParaStyle.TextAlign := AAlign;
+
+  LTextStyle := TSkTextStyle.Create;
   if FFontFamily <> '' then
-    Result := TSkTypeface.MakeFromName(FFontFamily, TSkFontStyle.Normal)
+    LTextStyle.FontFamilies := [FFontFamily, 'Segoe UI']
   else
-    Result := TSkTypeface.MakeDefault;
-  if Result = nil then
-    Result := TSkTypeface.MakeDefault;
+    LTextStyle.FontFamilies := ['Segoe UI'];
+  LTextStyle.FontSize := AFontSize;
+  LTextStyle.Color    := AColor;
+  if ABold then
+    LTextStyle.FontStyle := TSkFontStyle.Bold
+  else
+    LTextStyle.FontStyle := TSkFontStyle.Normal;
+
+  LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+  LBuilder.PushStyle(LTextStyle);
+  if AText.IsEmpty then
+    LBuilder.AddText(' ')
+  else
+    LBuilder.AddText(AText);
+  LBuilder.Pop;
+  Result := LBuilder.Build;
 end;
 
 procedure TTypeChartPanel.DrawChart(ASender: TObject; const ACanvas: ISkCanvas;
@@ -76,17 +101,16 @@ const
 var
   LPanelRect: TRectF;
   LPaint: ISkPaint;
-  LTypeface: ISkTypeface;
-  LFontTitle, LFontMult, LFontBadge: ISkFont;
-  LMetrics: TSkFontMetrics;
-  LX, LY, LBadgeW, LTextW, LBadgeMidY: Single;
+  LX, LY, LBadgeW, LBadgeMidY: Single;
   LEffect: TTypeEffect;
   LBadgeRect: TRectF;
   LTColor: TColor;
   LBadgeAlpha: TAlphaColor;
   LText: string;
-  I: Integer;
+  I, LActiveGroups, LTotalRows: Integer;
   LHasGroup: Boolean;
+  LP: ISkParagraph;
+  LEffectiveRowH, LBadgeH, LFontS, LMultFS: Single;
 begin
   LPanelRect := TRectF.Create(ADest.Left + PANEL_PAD, ADest.Top + PANEL_PAD,
     ADest.Right - PANEL_PAD, ADest.Bottom - PANEL_PAD);
@@ -102,32 +126,38 @@ begin
   ACanvas.Save;
   ACanvas.ClipRect(LPanelRect, TSkClipOp.Intersect, False);
 
-  LTypeface  := MakeTypeface;
-  LFontTitle := TSkFont.Create(LTypeface, 9);
-  LFontTitle.Embolden := True;
-  LFontMult  := TSkFont.Create(LTypeface, 11);
-  LFontMult.Embolden := True;
-  LFontBadge := TSkFont.Create(LTypeface, 8);
-  LFontBadge.Embolden := True;
+  LP := MakeParagraph('EFETIVIDADE DEFENSIVA', 8, $55FFFFFF, True,
+    TSkTextAlign.Center);
+  LP.Layout(LPanelRect.Width);
+  LP.Paint(ACanvas, LPanelRect.Left, LPanelRect.Top + PANEL_PAD);
+  LY := LPanelRect.Top + PANEL_PAD + LP.Height + 6;
 
-  LText  := 'EFETIVIDADE';
-  LTextW := LFontTitle.MeasureText(LText, LPaint);
-  LPaint.Color := $55FFFFFF;
-  LFontTitle.GetMetrics(LMetrics);
-  ACanvas.DrawSimpleText(LText,
-    LPanelRect.Left + (LPanelRect.Width - LTextW) / 2,
-    LPanelRect.Top + 14,
-    LFontTitle, LPaint);
-
-  LY := LPanelRect.Top + 26;
-
-  if Length(FEffects) = 0 then
+  LActiveGroups := 0;
+  for I := 0 to High(MULT_VALUES) do
   begin
-    ACanvas.Restore;
-    Exit;
+    for LEffect in FEffects do
+      if Abs(LEffect.Multiplier - MULT_VALUES[I]) < 0.01 then
+      begin
+        Inc(LActiveGroups);
+        Break;
+      end;
   end;
 
-  LFontMult.GetMetrics(LMetrics);
+  // Responsive sizing based on count
+  if LActiveGroups > 4 then
+  begin
+    LEffectiveRowH := 18.5;
+    LBadgeH := 14.5;
+    LFontS := 7.5;
+    LMultFS := 10;
+  end
+  else
+  begin
+    LEffectiveRowH := ROW_H;
+    LBadgeH := BADGE_H;
+    LFontS := 8;
+    LMultFS := 11;
+  end;
 
   for I := 0 to High(MULT_VALUES) do
   begin
@@ -141,11 +171,9 @@ begin
     if not LHasGroup then
       Continue;
 
-    LPaint.Color := FThemeColor;
-    ACanvas.DrawSimpleText(MULT_LABELS[I],
-      LPanelRect.Left + PANEL_PAD,
-      LY + ROW_H / 2 - (LMetrics.Ascent + LMetrics.Descent) / 2,
-      LFontMult, LPaint);
+    LP := MakeParagraph(MULT_LABELS[I], LMultFS, FThemeColor, True, TSkTextAlign.Left);
+    LP.Layout(MULT_W);
+    LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LY + (LEffectiveRowH - LP.Height) / 2);
 
     LX := LPanelRect.Left + PANEL_PAD + MULT_W;
 
@@ -154,23 +182,25 @@ begin
       if Abs(LEffect.Multiplier - MULT_VALUES[I]) > 0.01 then
         Continue;
 
-      LText   := UpperCase(LEffect.TypeName);
-      LTextW  := LFontBadge.MeasureText(LText, LPaint);
-      LBadgeW := LTextW + BADGE_X * 2;
+      LText := UpperCase(LEffect.TypeName);
+      LP    := MakeParagraph(LText, LFontS, $FFFFFFFF, True, TSkTextAlign.Left);
+      LP.Layout(300);
+      LBadgeW := LP.LongestLine + BADGE_X * 2 + 2;
 
+      // Wrap check: if badge exceeds right bound, move to next line
       if LX + LBadgeW > LPanelRect.Right - PANEL_PAD then
       begin
         LX := LPanelRect.Left + PANEL_PAD + MULT_W;
-        LY := LY + ROW_H;
+        LY := LY + LEffectiveRowH;
       end;
 
       LBadgeRect := TRectF.Create(
         LX,
-        LY + (ROW_H - BADGE_H) / 2,
+        LY + (LEffectiveRowH - LBadgeH) / 2,
         LX + LBadgeW,
-        LY + (ROW_H + BADGE_H) / 2);
+        LY + (LEffectiveRowH + LBadgeH) / 2);
 
-      LTColor := TPokemonController.GetTypeColor(LEffect.TypeName);
+      LTColor     := TPokemonController.GetTypeColor(LEffect.TypeName);
       LBadgeAlpha := $FF000000
         or (DWORD(GetRValue(LTColor)) shl 16)
         or (DWORD(GetGValue(LTColor)) shl 8)
@@ -179,18 +209,13 @@ begin
       LPaint.Color := LBadgeAlpha;
       ACanvas.DrawRoundRect(LBadgeRect, BADGE_R, BADGE_R, LPaint);
 
-      LFontBadge.GetMetrics(LMetrics);
       LBadgeMidY := (LBadgeRect.Top + LBadgeRect.Bottom) / 2;
-      LPaint.Color := $FFFFFFFF;
-      ACanvas.DrawSimpleText(LText,
-        LX + BADGE_X,
-        LBadgeMidY - (LMetrics.Ascent + LMetrics.Descent) / 2,
-        LFontBadge, LPaint);
+      LP.Paint(ACanvas, LX + BADGE_X + 1, LBadgeMidY - LP.Height / 2);
 
       LX := LX + LBadgeW + 4;
     end;
 
-    LY := LY + ROW_H;
+    LY := LY + LEffectiveRowH + 2; // Extra space between groups
   end;
 
   ACanvas.Restore;
