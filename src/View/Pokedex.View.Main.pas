@@ -23,6 +23,7 @@ uses
   Pokedex.Model.Pokemon,
   Pokedex.View.StatsPanel,
   Pokedex.View.EvolutionPanel,
+  Pokedex.View.TypeChart,
   System.Types,
   System.Math,
   Pokedex.Audio.Bass;
@@ -56,6 +57,7 @@ type
     FCurrentStream: TMemoryStream;
     FCryGeneration: Integer;
     FEvolutionPanel: TEvolutionPanel;
+    FTypeChart: TTypeChartPanel;
     FDisplayNameLabel: TSkLabel;
     FThemeTextColor: TAlphaColor;
     FIsShiny: Boolean;
@@ -106,9 +108,10 @@ type
       'Erro de conex'#227'o. Verifique sua internet e tente novamente.';
     DARK_PANEL_ALPHA: TAlphaColor = $FF2A2A2A;
     DARK_PANEL_VCL: TColor = $002A2A2A;
-    DESC_H = 60;
-    FLAVOR_H = 80;
-    EVOLUTION_H = 230;
+    FLAVOR_H = 90;
+    EVOLUTION_H = 180;
+    CHART_SPLIT = 65;
+    SPRITE_TOP = 148;
     SEARCH_H = 34;
     SEARCH_T = 7;
     SEARCH_W = 340;
@@ -187,12 +190,13 @@ begin
   btnNext.Visible := False;
   btnPrev.Visible := False;
 
+  // Shiny toggle below the Pokémon name, above the type badges
   FShinyLabel := TSkLabel.Create(Self);
   FShinyLabel.Parent := pnlImage;
   FShinyLabel.AutoSize := False;
-  FShinyLabel.SetBounds((pnlImage.Width - 130) div 2,
-    pnlImage.Height - 30, 130, 22);
-  FShinyLabel.Anchors := [akLeft, akBottom];
+  FShinyLabel.SetBounds((pnlImage.Width - 160) div 2,
+    FDisplayNameLabel.Top + FDisplayNameLabel.Height + 2, 160, 20);
+  FShinyLabel.Anchors := [akLeft, akTop];
   FShinyLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
   FShinyLabel.Caption := #$2605 + '  VER SHINY';
   FShinyLabel.Cursor := crHandPoint;
@@ -202,7 +206,7 @@ begin
   if FShinyLabel.Words.Count > 0 then
   begin
     FShinyLabel.Words[0].Font.Families := FFontName;
-    FShinyLabel.Words[0].Font.Size := 11;
+    FShinyLabel.Words[0].Font.Size := 10;
     FShinyLabel.Words[0].Font.Weight := TSkFontComponent.TSkFontWeight.Bold;
     FShinyLabel.Words[0].FontColor := TAlphaColors.White;
   end;
@@ -298,7 +302,7 @@ begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
 
-  FStatsPanel.SetBounds(0, DESC_H, pnlInfo.Width, pnlInfo.Height - DESC_H);
+  FStatsPanel.SetBounds(0, FLAVOR_H + 8, pnlInfo.Width, pnlInfo.Height - FLAVOR_H - 8);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
 end;
@@ -329,8 +333,8 @@ var
   LImgX, LImgY, LAvailH: Integer;
 begin
   LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
-  LAvailH := pnlImage.Height - 95 - 40; // from below name/types to above VER SHINY
-  LImgY := 95 + (LAvailH - SPRITE_SIZE) div 2;
+  LAvailH := pnlImage.Height - SPRITE_TOP;
+  LImgY := SPRITE_TOP + (LAvailH - SPRITE_SIZE) div 2;
 
   skImgPokemon.SetBounds(LImgX, LImgY, SPRITE_SIZE, SPRITE_SIZE);
 
@@ -354,41 +358,32 @@ begin
 end;
 
 procedure TPokedexView.FormResize(Sender: TObject);
+var
+  LEvoW: Integer;
 begin
   CenterSearchBar;
   CenterSprite;
 
   if Assigned(FDescLabel) and Assigned(pnlInfo) then
-  begin
-    FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
-      FLAVOR_H);
-    FDescLabel.BringToFront;
-  end;
+    FDescLabel.SetBounds(16, 8, pnlInfo.Width - 32, FLAVOR_H);
+
+  if Assigned(FStatsPanel) and Assigned(pnlInfo) then
+    FStatsPanel.SetBounds(0, FLAVOR_H + 8,
+      pnlInfo.Width, pnlInfo.Height - FLAVOR_H - 8);
+
+  LEvoW := ClientWidth * CHART_SPLIT div 100;
+  if Assigned(FEvolutionPanel) then
+    FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, LEvoW, EVOLUTION_H);
+  if Assigned(FTypeChart) then
+    FTypeChart.SetBounds(LEvoW, ClientHeight - EVOLUTION_H,
+      ClientWidth - LEvoW, EVOLUTION_H);
 end;
 
 procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-var
-  LShinyRect: TRect;
 begin
-  if Button <> mbLeft then
-    Exit;
-
-  if FShinyLabel.Visible then
-  begin
-    LShinyRect := Rect(
-      FShinyLabel.Left  - skImgPokemon.Left,
-      FShinyLabel.Top   - skImgPokemon.Top,
-      FShinyLabel.Left  + FShinyLabel.Width  - skImgPokemon.Left,
-      FShinyLabel.Top   + FShinyLabel.Height - skImgPokemon.Top);
-    if PtInRect(LShinyRect, Point(X, Y)) then
-    begin
-      ShinyIconClick(nil);
-      Exit;
-    end;
-  end;
-
-  PlayCry;
+  if Button = mbLeft then
+    PlayCry;
 end;
 
 procedure TPokedexView.PlayCry;
@@ -443,29 +438,34 @@ procedure TPokedexView.SetupDescriptionPanel;
 begin
   FDescLabel := TSkLabel.Create(Self);
   FDescLabel.Parent := pnlInfo;
-
-  FDescLabel.AutoSize := False; // Skia só quebra linha com largura fixa
+  FDescLabel.AutoSize := False;
   FDescLabel.Align := alNone;
-
-  FDescLabel.SetBounds(24, pnlInfo.Height - FLAVOR_H - 16, pnlInfo.Width - 48,
-    FLAVOR_H);
-  FDescLabel.Anchors := [akLeft, akRight, akBottom];
-
-  FDescLabel.BringToFront;
+  FDescLabel.SetBounds(16, 8, pnlInfo.Width - 32, FLAVOR_H);
+  FDescLabel.Anchors := [akLeft, akTop, akRight];
 end;
 
 procedure TPokedexView.SetupEvolutionPanel;
+var
+  LEvoW: Integer;
 begin
+  LEvoW := ClientWidth * CHART_SPLIT div 100;
+
   FEvolutionPanel := TEvolutionPanel.Create(Self);
   FEvolutionPanel.Parent := Self;
-  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
-    EVOLUTION_H);
-  FEvolutionPanel.Anchors := [akLeft, akRight, akBottom];
+  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, LEvoW, EVOLUTION_H);
+  FEvolutionPanel.Anchors := [akLeft, akBottom];
   FEvolutionPanel.FontFamily := FONT_FAMILY;
   FEvolutionPanel.OnNodeClick := procedure(AId: Integer)
     begin
       PerformSearch(AId.ToString);
     end;
+
+  FTypeChart := TTypeChartPanel.Create(Self);
+  FTypeChart.Parent := Self;
+  FTypeChart.SetBounds(LEvoW, ClientHeight - EVOLUTION_H,
+    ClientWidth - LEvoW, EVOLUTION_H);
+  FTypeChart.Anchors := [akRight, akBottom];
+  FTypeChart.FontFamily := FONT_FAMILY;
 end;
 
 procedure TPokedexView.Initialize(const AService: IPokemonService);
@@ -547,6 +547,11 @@ begin
 
   FStatsPanel.Redraw;
   FEvolutionPanel.Redraw;
+  if Assigned(FTypeChart) then
+  begin
+    FTypeChart.ThemeColor := LAlphaColor;
+    FTypeChart.Redraw;
+  end;
 
   if Assigned(FShinyLabel) and FShinyLabel.Visible then
     UpdateShinyIcon;
@@ -755,15 +760,19 @@ begin
       LPokemon: TPokemon;
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
+      LTypeEffects: TArray<TTypeEffect>;
       LErrorMsg: string;
       LSpriteUrl: string;
       LDominantColor: TColor;
+      LTypeNames: TArray<string>;
+      I: Integer;
     begin
       LPokemon := nil;
       LStream := nil;
       LErrorMsg := '';
       LDominantColor := 0;
       SetLength(LChain, 0);
+      SetLength(LTypeEffects, 0);
       try
         LPokemon := FController.ExecuteGetPokemon(AIdOrName);
         if FIsShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
@@ -781,6 +790,13 @@ begin
           not LPokemon.SpeciesData.EvolutionChain.Url.IsEmpty then
           LChain := FController.GetEvolutionChain
             (LPokemon.SpeciesData.EvolutionChain.Url);
+        if Length(LPokemon.Types) > 0 then
+        begin
+          SetLength(LTypeNames, Length(LPokemon.Types));
+          for I := 0 to High(LPokemon.Types) do
+            LTypeNames[I] := LPokemon.Types[I].&Type.Name;
+          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames);
+        end;
       except
         on E: EPokemonNotFound do
           LErrorMsg := MSG_NOT_FOUND;
@@ -794,6 +810,7 @@ begin
         FreeAndNil(LPokemon);
         FreeAndNil(LStream);
         SetLength(LChain, 0);
+        SetLength(LTypeEffects, 0);
       end;
 
       TThread.Synchronize(nil, TThreadProcedure(
@@ -852,6 +869,7 @@ begin
             UpdateFlavorText(LPokemon);
             FEvolutionPanel.LoadChain(
               TPokemonController.FilterEvolutionChain(LChain, FCurrentId));
+            FTypeChart.LoadEffects(LTypeEffects);
           finally
             FreeAndNil(LPokemon);
           end;
@@ -867,7 +885,7 @@ begin
   fpTypes.Width := LTotalWidth;
   fpTypes.Height := 24;
   fpTypes.Left := (pnlImage.Width - LTotalWidth) div 2;
-  fpTypes.Top := FDisplayNameLabel.Top + FDisplayNameLabel.Height + 5;
+  fpTypes.Top := FShinyLabel.Top + FShinyLabel.Height + 4;
   fpTypes.BringToFront;
 end;
 

@@ -1,4 +1,4 @@
-﻿unit Pokedex.View.StatsPanel;
+unit Pokedex.View.StatsPanel;
 
 interface
 
@@ -8,7 +8,6 @@ uses
   System.UITypes,
   System.Math,
   Vcl.Controls,
-  Vcl.Graphics,
   System.Skia,
   Vcl.Skia,
   System.Types;
@@ -42,18 +41,19 @@ type
 implementation
 
 const
-  MAX_STAT = 255;
-  COLS = 3;
-  ARC_STROKE = 7;
-  CARD_PAD = 8;
-  PANEL_PAD = 10;
-  INFO_H = 72;
+  MAX_STAT  = 255;
+  PANEL_PAD = 12;
+  ROW_H     = 26;
+  BAR_H     = 8;
+  BAR_R     = 4.0;
+  LABEL_W   = 52;
+  VAL_W     = 32;
   DARK_BG: TAlphaColor = $FF2A2A2A;
 
 constructor TStatsPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FBarColor := $FFE25D27;
+  FBarColor  := $FFE25D27;
   FFontFamily := '';
   SetLength(FStats, 0);
   OnDraw := DrawStats;
@@ -67,8 +67,8 @@ end;
 
 procedure TStatsPanel.LoadInfo(const AWeight, AHeight, AAbility: string);
 begin
-  FWeight := AWeight;
-  FHeight := AHeight;
+  FWeight  := AWeight;
+  FHeight  := AHeight;
   FAbility := AAbility;
   Redraw;
 end;
@@ -79,42 +79,34 @@ begin
     Result := TSkTypeface.MakeFromName(FFontFamily, TSkFontStyle.Normal)
   else
     Result := TSkTypeface.MakeDefault;
-
   if Result = nil then
     Result := TSkTypeface.MakeDefault;
 end;
 
 function TStatsPanel.AbbreviateStat(const AName: string): string;
 begin
-  if AName = 'hp' then
-    Result := 'HP'
-  else if AName = 'attack' then
-    Result := 'ATK'
-  else if AName = 'defense' then
-    Result := 'DEF'
-  else if AName = 'special-attack' then
-    Result := 'SP.ATK'
-  else if AName = 'special-defense' then
-    Result := 'SP.DEF'
-  else if AName = 'speed' then
-    Result := 'SPD'
-  else
-    Result := UpperCase(AName);
+  if AName = 'hp' then Result := 'HP'
+  else if AName = 'attack' then Result := 'ATK'
+  else if AName = 'defense' then Result := 'DEF'
+  else if AName = 'special-attack' then Result := 'SP.ATK'
+  else if AName = 'special-defense' then Result := 'SP.DEF'
+  else if AName = 'speed' then Result := 'SPD'
+  else Result := UpperCase(AName);
 end;
 
 procedure TStatsPanel.DrawStats(ASender: TObject; const ACanvas: ISkCanvas;
   const ADest: TRectF; const AOpacity: Single);
 var
-  LCount, I, LCol, LRow: Integer;
-  LRows: Integer;
-  LCellW, LCellH, LCX, LCY, LRadius, LSweep, LTextWidth: Single;
+  LCount, I: Integer;
+  LPanelRect, LBarBg, LBarFill: TRectF;
   LPaint: ISkPaint;
-  LFont, LFontSm, LFontInfo, LFontBold: ISkFont;
+  LFontLabel, LFontVal, LFontInfo, LFontInfoBold: ISkFont;
   LTypeface: ISkTypeface;
-  LRect, LPanelRect, LGridRect: TRectF;
-  LText: string;
   LStat: TPokemonStat;
-  LMetrics: TSkFontMetrics; // Para centralização vertical exata
+  LBarLeft, LBarRight, LBarTop, LFillX, LTextW: Single;
+  LText: string;
+  LMetrics: TSkFontMetrics;
+  LStatsTop, LInfoY, LMidX: Single;
 begin
   LCount := Length(FStats);
   if LCount = 0 then
@@ -125,85 +117,108 @@ begin
 
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
-
   LPaint.Style := TSkPaintStyle.Fill;
   LPaint.Color := DARK_BG;
   ACanvas.DrawRoundRect(LPanelRect, 16, 16, LPaint);
 
-  LTypeface := MakeTypeface;
-  LFontInfo := TSkFont.Create(LTypeface, 11);
-  LFontBold := TSkFont.Create(LTypeface, 11);
-  LFontBold.Embolden := True;
-  LFont := TSkFont.Create(LTypeface, 15);
-  LFontSm := TSkFont.Create(LTypeface, 10);
-  LFontSm.Embolden := True;
+  ACanvas.Save;
+  ACanvas.ClipRect(LPanelRect, TSkClipOp.Intersect, False);
 
-  LPaint.Color := $88FFFFFF;
-  ACanvas.DrawSimpleText('PESO', LPanelRect.Left + 16, LPanelRect.Top + 22,
-    LFontInfo, LPaint);
-  ACanvas.DrawSimpleText('ALTURA', LPanelRect.Left + 16, LPanelRect.Top + 42,
-    LFontInfo, LPaint);
-  ACanvas.DrawSimpleText('HABILIDADE', LPanelRect.Left + 16,
-    LPanelRect.Top + 62, LFontInfo, LPaint);
+  LTypeface  := MakeTypeface;
+  LFontLabel := TSkFont.Create(LTypeface, 10);
+  LFontLabel.Embolden := True;
+  LFontVal   := TSkFont.Create(LTypeface, 10);
+  LFontInfo     := TSkFont.Create(LTypeface, 9);
+  LFontInfoBold := TSkFont.Create(LTypeface, 10);
+  LFontInfoBold.Embolden := True;
 
-  LPaint.Color := $FFFFFFFF;
-  ACanvas.DrawSimpleText(FWeight, LPanelRect.Left + 110, LPanelRect.Top + 22,
-    LFontBold, LPaint);
-  ACanvas.DrawSimpleText(FHeight, LPanelRect.Left + 110, LPanelRect.Top + 42,
-    LFontBold, LPaint);
-  ACanvas.DrawSimpleText(FAbility, LPanelRect.Left + 110, LPanelRect.Top + 62,
-    LFontBold, LPaint);
-
-  LGridRect := TRectF.Create(LPanelRect.Left, LPanelRect.Top + INFO_H + 8,
-    LPanelRect.Right, LPanelRect.Bottom - 80);
-
-  LRows := Ceil(LCount / COLS);
-  LCellW := LGridRect.Width / COLS;
-  LCellH := LGridRect.Height / LRows;
+  LStatsTop  := LPanelRect.Top  + PANEL_PAD;
+  LBarLeft   := LPanelRect.Left + PANEL_PAD + LABEL_W + 8;
+  LBarRight  := LPanelRect.Right - PANEL_PAD - VAL_W - 6;
 
   for I := 0 to LCount - 1 do
   begin
-    LStat := FStats[I];
-    LCol := I mod COLS;
-    LRow := I div COLS;
-    LCX := LGridRect.Left + (LCol * LCellW) + (LCellW / 2);
-    LCY := LGridRect.Top + (LRow * LCellH) + (LCellH / 2);
-    LRadius := (Min(LCellW, LCellH) / 2) - ARC_STROKE - CARD_PAD - 8;
-    LRect := TRectF.Create(LCX - LRadius, LCY - LRadius, LCX + LRadius,
-      LCY + LRadius);
+    LStat    := FStats[I];
+    LBarTop  := LStatsTop + I * ROW_H + (ROW_H - BAR_H) / 2;
 
-    LPaint.Style := TSkPaintStyle.Stroke;
-    LPaint.StrokeWidth := ARC_STROKE;
-    LPaint.StrokeCap := TSkStrokeCap.Round;
-    LPaint.Color := $55FFFFFF;
-    ACanvas.DrawArc(LRect, -90, 360, False, LPaint);
-
-    LSweep := 360 * (LStat.Value / MAX_STAT);
-    if FBarColor = $FF2C2C2C then
-      LPaint.Color := $FFFFD700
-    else
-      LPaint.Color := FBarColor;
-    ACanvas.DrawArc(LRect, -90, LSweep, False, LPaint);
-
-    LPaint.Style := TSkPaintStyle.Fill;
-    LPaint.Color := $FFFFFFFF;
-    LText := LStat.Value.ToString;
-    LTextWidth := LFont.MeasureText(LText, LPaint);
-    LFont.GetMetrics(LMetrics);
-
-    // Fórmula: Baseline = Centro - (Ascent + Descent) / 2
-    ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),
-      LCY - (LMetrics.Ascent + LMetrics.Descent) / 2, LFont, LPaint);
-
-    if FBarColor = $FF2C2C2C then
-      LPaint.Color := $FFFFD700 // dourado — visível sobre preto
-    else
-      LPaint.Color := FBarColor;
+    // Stat label
+    LPaint.Color := $88FFFFFF;
     LText := AbbreviateStat(LStat.Name);
-    LTextWidth := LFontSm.MeasureText(LText, LPaint);
-    ACanvas.DrawSimpleText(LText, LCX - (LTextWidth / 2),
-      LCY - LRadius - ARC_STROKE - 5, LFontSm, LPaint);
+    LFontLabel.GetMetrics(LMetrics);
+    ACanvas.DrawSimpleText(LText,
+      LPanelRect.Left + PANEL_PAD,
+      LBarTop + BAR_H / 2 - (LMetrics.Ascent + LMetrics.Descent) / 2,
+      LFontLabel, LPaint);
+
+    // Background track
+    LBarBg := TRectF.Create(LBarLeft, LBarTop, LBarRight, LBarTop + BAR_H);
+    LPaint.Color := $33FFFFFF;
+    ACanvas.DrawRoundRect(LBarBg, BAR_R, BAR_R, LPaint);
+
+    // Fill
+    LFillX := LBarLeft + (LBarRight - LBarLeft) * Min(1.0, LStat.Value / MAX_STAT);
+    if LFillX > LBarLeft then
+    begin
+      LBarFill := TRectF.Create(LBarLeft, LBarTop, LFillX, LBarTop + BAR_H);
+      LPaint.Color := FBarColor;
+      ACanvas.DrawRoundRect(LBarFill, BAR_R, BAR_R, LPaint);
+    end;
+
+    // Value
+    LText  := LStat.Value.ToString;
+    LFontVal.GetMetrics(LMetrics);
+    LTextW := LFontVal.MeasureText(LText, LPaint);
+    LPaint.Color := $FFFFFFFF;
+    ACanvas.DrawSimpleText(LText,
+      LPanelRect.Right - PANEL_PAD - LTextW,
+      LBarTop + BAR_H / 2 - (LMetrics.Ascent + LMetrics.Descent) / 2,
+      LFontVal, LPaint);
   end;
+
+  // Divider
+  LInfoY := LStatsTop + LCount * ROW_H + 6;
+  LPaint.Style := TSkPaintStyle.Stroke;
+  LPaint.StrokeWidth := 1;
+  LPaint.Color := $22FFFFFF;
+  ACanvas.DrawLine(
+    TPointF.Create(LPanelRect.Left + 16, LInfoY),
+    TPointF.Create(LPanelRect.Right - 16, LInfoY), LPaint);
+  LPaint.Style := TSkPaintStyle.Fill;
+
+  LInfoY := LInfoY + 14;
+  LMidX  := LPanelRect.Left + LPanelRect.Width / 2;
+
+  LFontInfo.GetMetrics(LMetrics);
+
+  // PESO — left
+  LPaint.Color := $66FFFFFF;
+  ACanvas.DrawSimpleText('PESO',
+    LPanelRect.Left + 20, LInfoY, LFontInfo, LPaint);
+  LPaint.Color := $FFFFFFFF;
+  ACanvas.DrawSimpleText(FWeight,
+    LPanelRect.Left + 20, LInfoY + 14, LFontInfoBold, LPaint);
+
+  // ALTURA — center
+  LPaint.Color := $66FFFFFF;
+  LTextW := LFontInfo.MeasureText('ALTURA', LPaint);
+  ACanvas.DrawSimpleText('ALTURA',
+    LMidX - LTextW / 2, LInfoY, LFontInfo, LPaint);
+  LPaint.Color := $FFFFFFFF;
+  LTextW := LFontInfoBold.MeasureText(FHeight, LPaint);
+  ACanvas.DrawSimpleText(FHeight,
+    LMidX - LTextW / 2, LInfoY + 14, LFontInfoBold, LPaint);
+
+  // HABILIDADE — right
+  LPaint.Color := $66FFFFFF;
+  LTextW := LFontInfo.MeasureText('HABILIDADE', LPaint);
+  ACanvas.DrawSimpleText('HABILIDADE',
+    LPanelRect.Right - 20 - LTextW, LInfoY, LFontInfo, LPaint);
+  LPaint.Color := $FFFFFFFF;
+  LTextW := LFontInfoBold.MeasureText(FAbility, LPaint);
+  ACanvas.DrawSimpleText(FAbility,
+    LPanelRect.Right - 20 - LTextW, LInfoY + 14, LFontInfoBold, LPaint);
+
+  ACanvas.Restore;
 end;
 
 end.

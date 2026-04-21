@@ -427,6 +427,9 @@ var
   LJson, LTypeName: string;
   LRoot: TJSONValue;
   LObj, LRelObj: TJSONObject;
+  LArr: TJSONArray;
+  LItem: TJSONValue;
+  LCurr: Single;
   I, LCount: Integer;
   LPair: TPair<string, Single>;
   LTmp: TTypeEffect;

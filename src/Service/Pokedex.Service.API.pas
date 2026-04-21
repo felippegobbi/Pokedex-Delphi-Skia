@@ -17,6 +17,7 @@ type
     function GetPokemonJSON(const AIdOrName: string): string;
     function GetSpeciesJSON(const AUrl: string): string;
     function GetEvolutionChainJSON(const AUrl: string): string;
+    function GetTypeJSON(const AUrl: string): string;
   end;
 
 var
@@ -65,6 +66,11 @@ begin
 end;
 
 function TdmPokeService.GetEvolutionChainJSON(const AUrl: string): string;
+begin
+  Result := DoGet(AUrl);
+end;
+
+function TdmPokeService.GetTypeJSON(const AUrl: string): string;
 begin
   Result := DoGet(AUrl);
 end;
