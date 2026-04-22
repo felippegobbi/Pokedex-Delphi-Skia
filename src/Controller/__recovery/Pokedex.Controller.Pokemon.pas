@@ -28,9 +28,7 @@ type
     function ExecuteGetPokemon(const AIdOrName: string): TPokemon;
     function DownloadFile(const AUrl: string): TMemoryStream;
     function GetEvolutionChain(const AUrl: string): TArray<TEvolutionNode>;
-    function GetTypeEffectiveness(const ATypeNames: TArray<string>)
-      : TArray<TTypeEffect>;
-    function GetAbilityDescription(const AName: string): string;
+    function GetTypeEffectiveness(const ATypeNames: TArray<string>): TArray<TTypeEffect>;
     class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
       const AActivePokemonId: Integer): TArray<TEvolutionNode>;
     class function FormatMetric(const AValue: Integer;
@@ -39,8 +37,6 @@ type
     class function GetColorByString(const AColorName: string): TColor;
     class function GetTypeColor(const ATypeName: string): TColor;
     class function GetPreferredLanguage: string;
-    class function GetSystemLanguage: string;
-    class function Translate(const AText, AToLang: string): string;
     class function RandomPokemonId: Integer;
 
   const
@@ -62,7 +58,6 @@ implementation
 uses
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
-  System.NetEncoding,
   System.Json;
 
 class constructor TPokemonController.Create;
@@ -136,24 +131,25 @@ var
     if not Assigned(LSpecies) then
       Exit;
 
-    LParts := LSpecies.GetValue<string>('url').TrimRight(['/']).Split(['/']);
+    LParts := LSpecies.GetValue<string>('url').TrimRight(['/'])
+      .Split(['/']);
 
-    LNode.Name := LSpecies.GetValue<string>('name');
+    LNode.Name      := LSpecies.GetValue<string>('name');
     LNode.PokemonId := StrToIntDef(LParts[High(LParts)], 0);
-    LNode.IsActive := False;
+    LNode.IsActive  := False;
     LNode.SpriteUrl :=
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
       + LNode.PokemonId.ToString + '.png';
-    LNode.Stage := AStage;
+    LNode.Stage    := AStage;
     LNode.ParentId := AParentId;
 
-    LNode.Trigger.TriggerType := '';
-    LNode.Trigger.MinLevel := 0;
-    LNode.Trigger.MinHappiness := 0;
-    LNode.Trigger.ItemName := '';
-    LNode.Trigger.HeldItem := '';
-    LNode.Trigger.TimeOfDay := '';
-    LNode.Trigger.KnownMoveType := '';
+    LNode.Trigger.TriggerType    := '';
+    LNode.Trigger.MinLevel       := 0;
+    LNode.Trigger.MinHappiness   := 0;
+    LNode.Trigger.ItemName       := '';
+    LNode.Trigger.HeldItem       := '';
+    LNode.Trigger.TimeOfDay      := '';
+    LNode.Trigger.KnownMoveType  := '';
 
     // evolution_details: pode ser [] ou [{item: null, held_item: null, ...}]
     LDetailsVal := ALink.GetValue('evolution_details');
@@ -169,11 +165,11 @@ var
           LNode.Trigger.TriggerType := LObj.GetValue<string>('name');
 
         LVal := LDetail.GetValue('min_level');
-        if Assigned(LVal) and not(LVal is TJSONNull) then
+        if Assigned(LVal) and not (LVal is TJSONNull) then
           LNode.Trigger.MinLevel := StrToIntDef(LVal.Value, 0);
 
         LVal := LDetail.GetValue('min_happiness');
-        if Assigned(LVal) and not(LVal is TJSONNull) then
+        if Assigned(LVal) and not (LVal is TJSONNull) then
           LNode.Trigger.MinHappiness := StrToIntDef(LVal.Value, 0);
 
         // Campos que chegam como null quando não aplicáveis
@@ -186,7 +182,7 @@ var
           LNode.Trigger.HeldItem := LObj.GetValue<string>('name');
 
         LVal := LDetail.GetValue('time_of_day');
-        if Assigned(LVal) and not(LVal is TJSONNull) then
+        if Assigned(LVal) and not (LVal is TJSONNull) then
           LNode.Trigger.TimeOfDay := LVal.Value;
 
         LObj := SafeObj(LDetail, 'known_move_type');
@@ -199,14 +195,14 @@ var
     Result[High(Result)] := LNode;
 
     LEvolvesToVal := ALink.GetValue('evolves_to');
-    if not(Assigned(LEvolvesToVal) and (LEvolvesToVal is TJSONArray)) then
+    if not (Assigned(LEvolvesToVal) and (LEvolvesToVal is TJSONArray)) then
       Exit;
 
     LEvolvesTo := TJSONArray(LEvolvesToVal);
     for I := 0 to LEvolvesTo.Count - 1 do
       if LEvolvesTo.Items[I] is TJSONObject then
-        CollectNodes(TJSONObject(LEvolvesTo.Items[I]), AStage + 1,
-          LNode.PokemonId);
+        CollectNodes(TJSONObject(LEvolvesTo.Items[I]),
+          AStage + 1, LNode.PokemonId);
   end;
 
 begin
@@ -216,7 +212,7 @@ begin
     Exit;
 
   LRootVal := TJSONObject.ParseJSONValue(LJson);
-  if not(Assigned(LRootVal) and (LRootVal is TJSONObject)) then
+  if not (Assigned(LRootVal) and (LRootVal is TJSONObject)) then
   begin
     LRootVal.Free;
     Exit;
@@ -243,19 +239,16 @@ begin
 
     Result := TJson.JsonToObject<TPokemon>(LContent);
     if not Assigned(Result) then
-      raise EPokemonParseError.Create
-        ('N'#227'o foi poss'#237'vel processar os dados do Pok'#233'mon');
+      raise EPokemonParseError.Create('N'#227'o foi poss'#237'vel processar os dados do Pok'#233'mon');
 
     if Assigned(Result.Species) then
-      try
-        LSpeciesContent := FService.GetSpeciesJSON(Result.Species.Url);
-        if not LSpeciesContent.IsEmpty then
-          Result.SpeciesData := TJson.JsonToObject<TPokemonSpecies>
-            (LSpeciesContent);
-      except
-        on EPokemonError do;
-        // species data is non-critical; partial result is acceptable
-      end;
+    try
+      LSpeciesContent := FService.GetSpeciesJSON(Result.Species.Url);
+      if not LSpeciesContent.IsEmpty then
+        Result.SpeciesData := TJson.JsonToObject<TPokemonSpecies>(LSpeciesContent);
+    except
+      on EPokemonError do ; // species data is non-critical; partial result is acceptable
+    end;
   except
     on E: EPokemonError do
     begin
@@ -270,9 +263,10 @@ begin
   end;
 end;
 
-class function TPokemonController.FilterEvolutionChain
-  (const AChain: TArray<TEvolutionNode>; const AActivePokemonId: Integer)
-  : TArray<TEvolutionNode>;
+
+class function TPokemonController.FilterEvolutionChain(
+  const AChain: TArray<TEvolutionNode>;
+  const AActivePokemonId: Integer): TArray<TEvolutionNode>;
 var
   I: Integer;
   LChain: TArray<TEvolutionNode>;
@@ -282,29 +276,24 @@ var
   LFound: Boolean;
 
   procedure AddInclude(AId: Integer);
-  var
-    J: Integer;
+  var J: Integer;
   begin
     for J := 0 to High(LInclude) do
-      if LInclude[J] = AId then
-        Exit;
+      if LInclude[J] = AId then Exit;
     SetLength(LInclude, Length(LInclude) + 1);
     LInclude[High(LInclude)] := AId;
   end;
 
   function InInclude(AId: Integer): Boolean;
-  var
-    J: Integer;
+  var J: Integer;
   begin
     for J := 0 to High(LInclude) do
-      if LInclude[J] = AId then
-        Exit(True);
+      if LInclude[J] = AId then Exit(True);
     Result := False;
   end;
 
   procedure AddSubtree(AParentId: Integer);
-  var
-    J: Integer;
+  var J: Integer;
   begin
     for J := 0 to High(LChain) do
       if LChain[J].ParentId = AParentId then
@@ -318,7 +307,7 @@ begin
   SetLength(LChain, Length(AChain));
   for I := 0 to High(AChain) do
   begin
-    LChain[I] := AChain[I];
+    LChain[I]          := AChain[I];
     LChain[I].IsActive := LChain[I].PokemonId = AActivePokemonId;
   end;
 
@@ -348,11 +337,10 @@ begin
       if LChain[I].PokemonId = LParentId then
       begin
         LParentId := LChain[I].ParentId;
-        LFound := True;
+        LFound    := True;
         Break;
       end;
-    if not LFound then
-      Break;
+    if not LFound then Break;
   end;
 
   AddSubtree(LChain[LActiveIdx].PokemonId);
@@ -427,17 +415,21 @@ begin
 
 end;
 
-function TPokemonController.GetTypeEffectiveness(const ATypeNames
-  : TArray<string>): TArray<TTypeEffect>;
+function TPokemonController.GetTypeEffectiveness(
+  const ATypeNames: TArray<string>): TArray<TTypeEffect>;
 const
-  ALL_TYPES: array [0 .. 17] of string = ('normal', 'fire', 'water', 'electric',
-    'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
+  ALL_TYPES: array[0..17] of string = (
+    'normal', 'fire', 'water', 'electric', 'grass', 'ice',
+    'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
     'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy');
 var
   LMap: TDictionary<string, Single>;
   LJson, LTypeName: string;
   LRoot: TJSONValue;
   LObj, LRelObj: TJSONObject;
+  LArr: TJSONArray;
+  LItem: TJSONValue;
+  LCurr: Single;
   I, LCount: Integer;
   LPair: TPair<string, Single>;
   LTmp: TTypeEffect;
@@ -472,13 +464,12 @@ begin
     for I := 0 to High(ATypeNames) do
     begin
       try
-        LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/type/' +
-          LowerCase(ATypeNames[I]));
+        LJson := FService.GetTypeJSON(
+          'https://pokeapi.co/api/v2/type/' + LowerCase(ATypeNames[I]));
         LRoot := TJSONObject.ParseJSONValue(LJson);
-        if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
+        if not (Assigned(LRoot) and (LRoot is TJSONObject)) then
         begin
-          if Assigned(LRoot) then
-            LRoot.Free;
+          if Assigned(LRoot) then LRoot.Free;
           Continue;
         end;
         LObj := TJSONObject(LRoot);
@@ -507,7 +498,7 @@ begin
     for LPair in LMap do
       if Abs(LPair.Value - 1.0) > 0.01 then
       begin
-        Result[LCount].TypeName := LPair.Key;
+        Result[LCount].TypeName   := LPair.Key;
         Result[LCount].Multiplier := LPair.Value;
         Inc(LCount);
       end;
@@ -530,109 +521,9 @@ begin
   end;
 end;
 
-function TPokemonController.GetAbilityDescription(const AName: string): string;
-var
-  LJson: string;
-  LRoot: TJSONValue;
-  LObj: TJSONObject;
-  LArr: TJSONArray;
-  LEntry, LLangObj: TJSONValue;
-  LLang, LBackupEn: string;
-begin
-  Result := '';
-  if AName.IsEmpty then
-    Exit;
-  try
-    LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/ability/' +
-      LowerCase(AName));
-    LRoot := TJSONObject.ParseJSONValue(LJson);
-    if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
-    begin
-      if Assigned(LRoot) then
-        LRoot.Free;
-      Exit;
-    end;
-    LObj := TJSONObject(LRoot);
-    try
-      LArr := TJSONArray(LObj.GetValue('flavor_text_entries'));
-      if not Assigned(LArr) then
-        Exit;
-      LLang := GetPreferredLanguage;
-      LBackupEn := '';
-      for LEntry in LArr do
-        if LEntry is TJSONObject then
-        begin
-          LLangObj := TJSONObject(LEntry).GetValue('language');
-          if not(Assigned(LLangObj) and (LLangObj is TJSONObject)) then
-            Continue;
-          if TJSONObject(LLangObj).GetValue<string>('name') = LLang then
-            Result := TJSONObject(LEntry).GetValue<string>('flavor_text')
-          else if TJSONObject(LLangObj).GetValue<string>('name') = 'en' then
-            LBackupEn := TJSONObject(LEntry).GetValue<string>('flavor_text');
-        end;
-      if Result.IsEmpty then
-        Result := LBackupEn;
-      Result := Result.Replace(#10, ' ').Replace(#12, ' ').Replace(#13, ' ');
-    finally
-      LObj.Free;
-    end;
-  except
-    Result := '';
-  end;
-end;
-
-class function TPokemonController.GetSystemLanguage: string;
-var
-  LLocaleName: array [0 .. LOCALE_NAME_MAX_LENGTH - 1] of Char;
-begin
-  if GetUserDefaultLocaleName(LLocaleName, LOCALE_NAME_MAX_LENGTH) > 0 then
-    Result := string(LLocaleName).Split(['-'])[0].ToLower
-  else
-    Result := 'en';
-end;
-
-class function TPokemonController.Translate(const AText,
-  AToLang: string): string;
-var
-  LHttp: TNetHTTPClient;
-  LUrl: string;
-  LRoot: TJSONValue;
-  LRespDataVal: TJSONValue;
-  LTranslated: string;
-begin
-  Result := AText;
-  if AText.IsEmpty or (AToLang = 'en') then
-    Exit;
-  LHttp := TNetHTTPClient.Create(nil);
-  try
-    try
-      LUrl := 'https://api.mymemory.translated.net/get?q=' +
-        TNetEncoding.URL.Encode(AText.Trim) + '&langpair=en|' + AToLang;
-      LRoot := TJSONObject.ParseJSONValue(LHttp.Get(LUrl).ContentAsString);
-      if Assigned(LRoot) and (LRoot is TJSONObject) then
-      try
-        LRespDataVal := TJSONObject(LRoot).GetValue('responseData');
-        if Assigned(LRespDataVal) and (LRespDataVal is TJSONObject) then
-        begin
-          LTranslated := TJSONObject(LRespDataVal).GetValue<string>(
-            'translatedText', AText);
-          if not LTranslated.StartsWith('MYMEMORY WARNING') then
-            Result := LTranslated;
-        end;
-      finally
-        LRoot.Free;
-      end;
-    except
-      Result := AText;
-    end;
-  finally
-    LHttp.Free;
-  end;
-end;
-
 class function TPokemonController.GetPreferredLanguage: string;
 var
-  LLocaleName: array [0 .. LOCALE_NAME_MAX_LENGTH - 1] of Char;
+  LLocaleName: array[0..LOCALE_NAME_MAX_LENGTH - 1] of Char;
   LLocale, LPrimary: string;
 begin
   Result := 'en';
@@ -640,18 +531,12 @@ begin
     Exit;
   LLocale := string(LLocaleName);
   LPrimary := LLocale.Split(['-'])[0].ToLower;
-  if LPrimary = 'fr' then
-    Result := 'fr'
-  else if LPrimary = 'de' then
-    Result := 'de'
-  else if LPrimary = 'es' then
-    Result := 'es'
-  else if LPrimary = 'it' then
-    Result := 'it'
-  else if LPrimary = 'ja' then
-    Result := 'ja'
-  else if LPrimary = 'ko' then
-    Result := 'ko'
+  if LPrimary = 'fr' then Result := 'fr'
+  else if LPrimary = 'de' then Result := 'de'
+  else if LPrimary = 'es' then Result := 'es'
+  else if LPrimary = 'it' then Result := 'it'
+  else if LPrimary = 'ja' then Result := 'ja'
+  else if LPrimary = 'ko' then Result := 'ko'
   else if LPrimary = 'zh' then
   begin
     if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)

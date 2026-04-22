@@ -33,6 +33,7 @@ type
       Shift: TShiftState; X, Y: Integer);
     function FormatTrigger(const ATrigger: TEvolutionTrigger): string;
     function FormatItemName(const AName: string): string;
+    function CapitalizeName(const AName: string): string;
     function MakeParagraph(const AText: string; AFontSize: Single;
       AColor: TAlphaColor; ABold: Boolean): ISkParagraph;
   public
@@ -179,6 +180,19 @@ begin
   Result := string.Join(' ', LParts);
 end;
 
+function TEvolutionPanel.CapitalizeName(const AName: string): string;
+var
+  LParts: TArray<string>;
+  I: Integer;
+begin
+  if AName.IsEmpty then Exit('');
+  LParts := AName.Split(['-']);
+  for I := 0 to High(LParts) do
+    if LParts[I].Length > 0 then
+      LParts[I] := LParts[I].Substring(0, 1).ToUpper + LParts[I].Substring(1);
+  Result := string.Join('-', LParts);
+end;
+
 function TEvolutionPanel.FormatTrigger(
   const ATrigger: TEvolutionTrigger): string;
 begin
@@ -318,7 +332,6 @@ begin
 
   SetLength(LCx, LCount);
   SetLength(LCy, LCount);
-  LColW      := 0;
   LRowH      := 0;
   LLeafSlotW := 0;
   LSpriteX_L := 0; LSpriteX_R := 0;
@@ -375,9 +388,10 @@ begin
   begin
     LRowH      := LUsableH / LNumStages;
     LLeafSlotW := LUsableW / LLeafCount;
-    LMaxImgV   := Max(36.0, 72.0 - LLeafCount * 4.0);
-    LImgSize   := Max(28.0, Min(LMaxImgV, Min(LRowH * 0.55, LLeafSlotW * 0.55)));
-    LTextW     := Min(120.0, LLeafSlotW - 8.0);
+    // Scale max image size based on leaf count to avoid crowding
+    LMaxImgV   := Max(28.0, 72.0 - LLeafCount * 5.0);
+    LImgSize   := Max(24.0, Min(LMaxImgV, Min(LRowH * 0.55, LLeafSlotW * 0.70)));
+    LTextW     := Min(120.0, LLeafSlotW - 6.0);
 
     for I := 0 to LCount - 1 do
       LCy[I] := LPanelRect.Top + (FNodes[I].Stage + 0.5) * LRowH;
@@ -409,8 +423,8 @@ begin
         end;
   end;
 
-  LNameFontSize    := Max(8.0, Min(14.0, LImgSize * 0.20));
-  LTriggerFontSize := Max(8.0, Min(11.0, LImgSize * 0.16));
+  LNameFontSize    := Max(7.0, Min(14.0, LImgSize * 0.22));
+  LTriggerFontSize := Max(6.5, Min(11.0, LImgSize * 0.18));
 
   SetLength(FNodeRects, LCount);
   for I := 0 to LCount - 1 do
@@ -609,7 +623,7 @@ begin
     else
       LNameColor := $AAFFFFFF;
 
-    LParagraph := MakeParagraph(FNodes[I].Name, LNameFontSize, LNameColor, True);
+    LParagraph := MakeParagraph(CapitalizeName(FNodes[I].Name), LNameFontSize, LNameColor, True);
     LParagraph.Layout(LTextW);
     LParagraph.Paint(ACanvas, LCx[I] - LTextW / 2, LCy[I] + LImgSize / 2 + 2);
   end;

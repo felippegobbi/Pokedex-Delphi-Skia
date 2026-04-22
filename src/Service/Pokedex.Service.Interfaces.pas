@@ -16,6 +16,7 @@ type
     function GetPokemonJSON(const AIdOrName: string): string;
     function GetSpeciesJSON(const AUrl: string): string;
     function GetEvolutionChainJSON(const AUrl: string): string;
+    function GetTypeJSON(const AUrl: string): string;
   end;
 
 implementation

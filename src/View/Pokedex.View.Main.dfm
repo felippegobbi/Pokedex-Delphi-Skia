@@ -3,8 +3,8 @@ object PokedexView: TPokedexView
   Top = 0
   BorderStyle = bsSingle
   Caption = 'Pok'#233'dex'
-  ClientHeight = 580
-  ClientWidth = 703
+  ClientHeight = 680
+  ClientWidth = 800
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -18,7 +18,7 @@ object PokedexView: TPokedexView
   object pnlTopContainer: TPanel
     Left = 0
     Top = 0
-    Width = 703
+    Width = 800
     Height = 48
     Align = alTop
     BevelOuter = bvNone
@@ -29,7 +29,7 @@ object PokedexView: TPokedexView
     Left = 0
     Top = 48
     Width = 368
-    Height = 532
+    Height = 632
     Align = alLeft
     BevelOuter = bvNone
     Padding.Left = 10
@@ -82,13 +82,14 @@ object PokedexView: TPokedexView
   object pnlInfo: TRelativePanel
     Left = 368
     Top = 48
-    Width = 335
-    Height = 532
+    Width = 432
+    Height = 632
     ControlCollection = <>
     Align = alClient
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 2
+    ExplicitWidth = 335
     ExplicitHeight = 472
   end
 end

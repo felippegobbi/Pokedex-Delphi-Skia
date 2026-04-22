@@ -161,6 +161,11 @@ type
     Trigger: TEvolutionTrigger;
   end;
 
+  TTypeEffect = record
+    TypeName: string;
+    Multiplier: Single;
+  end;
+
   TEvolutionDetail = class
   private
     [JSONName('min_level')]
