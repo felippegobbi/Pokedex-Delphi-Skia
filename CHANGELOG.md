@@ -17,24 +17,44 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 ### Added / Adicionado
 
 - **Offensive type chart**: The stats panel now shows what the current Pokemon hits for super-effective, resisted, or null damage based on its own typing.
+- **Chart ofensivo de tipos**: O painel de stats agora mostra o que o Pokémon atual acerta com dano super efetivo, resistido ou nulo com base em sua própria tipagem.
 - **Type-colored movepool**: Moves in the learning panel now inherit their elemental colors, making TM, Egg and Level sections easier to scan.
+- **Movepool colorido por tipo**: Os golpes no painel de aprendizagem agora herdam suas cores elementais, facilitando a leitura das seções `TM`, `Egg` e `Level`.
 - **Tabbed learning panel**: The stats area gained a second tab dedicated to move learning, with internal subtabs for `LEVEL`, `TM`, and `EGG`.
+- **Painel de aprendizagem com abas**: A área de stats ganhou uma segunda aba dedicada à aprendizagem de golpes, com subabas internas para `LEVEL`, `TM` e `EGG`.
 - **Lazy-loaded move learning**: Move data is fetched only when the learning tab is opened, reducing wasted work when browsing multiple Pokemon.
+- **Aprendizagem de golpes sob demanda**: Os dados dos golpes agora são buscados apenas quando a aba de aprendizagem é aberta, reduzindo trabalho desnecessário ao navegar por vários Pokémon.
 - **Level-up list layout**: The `LEVEL` subtab now uses a list-style presentation with level markers and move chips, inspired by encyclopedia layouts.
+- **Layout em lista para level-up**: A subaba `LEVEL` agora usa uma apresentação em lista com marcadores de nível e chips de golpes, inspirada em layouts de enciclopédia.
 
 ### Changed / Alterado
 
 - **Defensive chart with abilities**: The weakness panel now factors in `Levitate`, `Thick Fat`, and `Filter`, including a note when one of these abilities modifies the chart.
+- **Chart defensivo com habilidades**: O painel de fraquezas agora considera `Levitate`, `Thick Fat` e `Filter`, incluindo uma nota quando uma dessas habilidades modifica o chart.
 - **Stats panel organization**: The right column was rebalanced into tabs so the original stats view remains readable without a scroll-heavy panel.
+- **Organização do painel de stats**: A coluna da direita foi reequilibrada em abas para que a visualização original de stats continue legível sem depender de um painel carregado de scroll.
 - **Search/history interactions**: The search history dropdown now closes on more interactions and no longer lingers over the main content.
+- **Interações de busca/histórico**: O dropdown de histórico da busca agora fecha em mais interações e não fica mais persistindo sobre o conteúdo principal.
 - **Left-column layout polish**: Search, name, favorite icon, navigation arrows and sprite spacing were rebalanced to reduce clutter and better center the composition.
+- **Polimento do layout da coluna esquerda**: Busca, nome, ícone de favorito, setas de navegação e espaçamento do sprite foram reequilibrados para reduzir ruído visual e centralizar melhor a composição.
 - **Top overlay containment**: The top search container is now constrained to the left column, preventing it from overlapping the stats panel.
+- **Contenção do overlay superior**: O container de busca do topo agora fica restrito à coluna esquerda, evitando sobreposição com o painel de stats.
 
 ### Technical / Técnico
 
 - **Controller split for movepool**: `TPokemonController` now exposes a dedicated `GetMovePool` flow instead of forcing move parsing during the main Pokemon load.
+- **Separação do controller para movepool**: `TPokemonController` agora expõe um fluxo dedicado de `GetMovePool` em vez de forçar o parsing dos golpes durante a carga principal do Pokémon.
 - **Move metadata model**: `TMovePoolSection` now carries move types alongside move names so the UI can render contextual coloring.
+- **Modelo com metadados dos golpes**: `TMovePoolSection` agora carrega os tipos dos golpes junto com seus nomes para que a UI possa renderizar coloração contextual.
 - **Stale request protection for moves**: Lazy movepool loading uses its own request token to avoid showing moves from a previously selected Pokemon.
+- **Proteção contra requisições obsoletas de golpes**: O carregamento lazy do movepool usa seu próprio token de requisição para evitar exibir golpes de um Pokémon selecionado anteriormente.
+
+## [5.6.1] - 2026-04-23
+
+### Docs / Documentação
+
+- **Bilingual changelog consistency**: The `5.6.0` release notes were updated so every new entry once again includes both English and Portuguese text, matching the established V5 documentation pattern.
+- **Consistência bilíngue do changelog**: As notas da versão `5.6.0` foram atualizadas para que toda nova entrada volte a incluir texto em inglês e em português, seguindo o padrão de documentação já estabelecido na V5.
 
 ## [5.5.0] - 2026-04-22
 
