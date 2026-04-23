@@ -32,6 +32,9 @@ type
     FWeight: string;
     FHeight: string;
     FAbility: string;
+    FGenderRatio: string;
+    FEggGroups: string;
+    FHatchCounter: string;
     FFontFamily: string;
     FDescription: string;
     FAbilityDescription: string;
@@ -71,6 +74,8 @@ type
     constructor Create(AOwner: TComponent); override;
     procedure LoadStats(const AStats: TArray<TPokemonStat>);
     procedure LoadInfo(const AWeight, AHeight, AAbility: string);
+    procedure LoadBreeding(const AGenderRatio, AEggGroups,
+      AHatchCounter: string);
     procedure LoadDescription(const AText: string);
     procedure LoadAbilityDescription(const AText: string);
     procedure LoadEffects(const ADefensiveEffects, AOffensiveEffects
@@ -112,6 +117,9 @@ begin
   inherited Create(AOwner);
   FBarColor := $FFE25D27;
   FFontFamily := '';
+  FGenderRatio := '';
+  FEggGroups := '';
+  FHatchCounter := '';
   FDescription := '';
   FAbilityDescription := '';
   FDefenseNote := '';
@@ -145,6 +153,15 @@ begin
   FWeight := AWeight;
   FHeight := AHeight;
   FAbility := AAbility;
+  Redraw;
+end;
+
+procedure TStatsPanel.LoadBreeding(const AGenderRatio, AEggGroups,
+  AHatchCounter: string);
+begin
+  FGenderRatio := AGenderRatio;
+  FEggGroups := AEggGroups;
+  FHatchCounter := AHatchCounter;
   Redraw;
 end;
 
@@ -502,6 +519,51 @@ begin
     TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+
+  if (FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '') then
+  begin
+    LY := LY + 22;
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 1;
+    LPaint.Color := $22FFFFFF;
+    ACanvas.DrawLine(TPointF.Create(APanelRect.Left + 16, LY),
+      TPointF.Create(APanelRect.Right - 16, LY), LPaint);
+    LY := LY + 10;
+
+    LP := MakeParagraph('BREEDING', STATS_FONT_SIZE, $88FFFFFF, True, False,
+      TSkTextAlign.Center, 1);
+    LP.Layout(APanelRect.Width);
+    LP.Paint(ACanvas, APanelRect.Left, LY);
+    LY := LY + LP.Height + 8;
+
+    LP := MakeParagraph('GÊNERO', STATS_FONT_SIZE, $88FFFFFF, True, False,
+      TSkTextAlign.Left, 1);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+    LP := MakeParagraph('GRUPOS DE OVO', STATS_FONT_SIZE, $88FFFFFF, True,
+      False, TSkTextAlign.Center, 1);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+    LP := MakeParagraph('PASSOS', STATS_FONT_SIZE, $88FFFFFF, True, False,
+      TSkTextAlign.Right, 1);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+
+    LY := LY + 16;
+    LP := MakeParagraph(FGenderRatio, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+      TSkTextAlign.Left, 2);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+    LP := MakeParagraph(FEggGroups, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+      TSkTextAlign.Center, 2);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+    LP := MakeParagraph(FHatchCounter, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+      TSkTextAlign.Right, 2);
+    LP.Layout(LLayoutW);
+    LP.Paint(ACanvas, APanelRect.Left + 20, LY);
+    LY := LY + 26;
+  end;
 
   LY := LY + 20;
   if FAbilityDescription <> '' then

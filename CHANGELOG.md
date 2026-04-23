@@ -11,6 +11,19 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - `Sprint 4` → `feat(5.4.0): Sprint 4 - Search History, Type Filter, Favorites & Translation`
 - `Sprint 5` → `feat(5.5.0): Sprint 5 - Search Loading & Stability Hardening`
 - `Sprint 6` → `feat(5.6.0): Sprint 6 - Offensive Chart & Lazy Movepool`
+- `Sprint 7` → `feat(5.7.0): Sprint 7 - Breeding, Flavor Versions & Locations`
+
+## [5.7.0] - 2026-04-23
+
+### Added / Adicionado
+
+- **Breeding info in stats panel**: The main stats tab now displays breeding data from `pokemon-species`, including gender ratio, egg groups and hatch counter.
+- **Informações de breeding no painel de stats**: A aba principal de stats agora exibe dados de breeding vindos de `pokemon-species`, incluindo proporção de gênero, grupos de ovo e hatch counter.
+
+### Technical / Técnico
+
+- **Species model expansion**: `TPokemonSpecies` now maps `gender_rate`, `egg_groups` and `hatch_counter`, making breeding metadata available without adding a new network flow.
+- **Expansão do modelo de species**: `TPokemonSpecies` agora mapeia `gender_rate`, `egg_groups` e `hatch_counter`, deixando os metadados de breeding disponíveis sem adicionar um novo fluxo de rede.
 
 ## [5.6.0] - 2026-04-23
 

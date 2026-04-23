@@ -90,6 +90,12 @@ type
     FEvolutionChain: TApiResource;
     [JSONName('color')]
     FColor: TApiResource;
+    [JSONName('gender_rate')]
+    FGenderRate: Integer;
+    [JSONName('hatch_counter')]
+    FHatchCounter: Integer;
+    [JSONName('egg_groups')]
+    FEggGroups: TArray<TApiResource>;
   public
     destructor Destroy; override;
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
@@ -97,6 +103,9 @@ type
     property EvolutionChain: TApiResource read FEvolutionChain
       write FEvolutionChain;
     property Color: TApiResource read FColor write FColor;
+    property GenderRate: Integer read FGenderRate write FGenderRate;
+    property HatchCounter: Integer read FHatchCounter write FHatchCounter;
+    property EggGroups: TArray<TApiResource> read FEggGroups write FEggGroups;
 
     function GetDescription(const ALang: string = 'en'): string;
   end;
@@ -284,9 +293,12 @@ end;
 destructor TPokemonSpecies.Destroy;
 var
   LEntry: TFlavorText;
+  LEggGroup: TApiResource;
 begin
   for LEntry in FFlavorEntries do
     LEntry.Free;
+  for LEggGroup in FEggGroups do
+    LEggGroup.Free;
   FreeAndNil(FEvolutionChain);
   FreeAndNil(FColor);
   inherited;

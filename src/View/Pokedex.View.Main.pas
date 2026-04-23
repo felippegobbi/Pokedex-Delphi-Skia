@@ -1376,8 +1376,9 @@ end;
 procedure TPokedexView.UpdatePokemonStats(APokemon: TPokemon);
 var
   LStats: TArray<TPokemonStat>;
-  LAbility: string;
+  LAbility, LGenderRatio, LEggGroups, LHatchCounter, LEggGroupName: string;
   I: Integer;
+  LFemaleRate, LMaleRate: Double;
 begin
   if Length(APokemon.Abilities) > 0 then
     LAbility := UpperCase(APokemon.Abilities[0].Ability.Name)
@@ -1392,6 +1393,38 @@ begin
     LStats[I].Value := APokemon.Stats[I].BaseStat;
   end;
   FStatsPanel.LoadStats(LStats);
+
+  LGenderRatio := '';
+  LEggGroups := '';
+  LHatchCounter := '';
+  if Assigned(APokemon.SpeciesData) then
+  begin
+    if APokemon.SpeciesData.GenderRate < 0 then
+      LGenderRatio := 'Sem gênero'
+    else
+    begin
+      LFemaleRate := (APokemon.SpeciesData.GenderRate / 8.0) * 100.0;
+      LMaleRate := 100.0 - LFemaleRate;
+      LGenderRatio := Format('M %.1f%% / F %.1f%%', [LMaleRate, LFemaleRate]);
+    end;
+
+    for I := 0 to High(APokemon.SpeciesData.EggGroups) do
+    begin
+      LEggGroupName := TPokemonController.CapitalizeDisplayName(
+        APokemon.SpeciesData.EggGroups[I].Name);
+      if LEggGroups <> '' then
+        LEggGroups := LEggGroups + ', ';
+      LEggGroups := LEggGroups + LEggGroupName;
+    end;
+    if LEggGroups = '' then
+      LEggGroups := 'Indisponível';
+
+    if APokemon.SpeciesData.HatchCounter > 0 then
+      LHatchCounter := Format('%d ciclos', [APokemon.SpeciesData.HatchCounter])
+    else
+      LHatchCounter := 'Indisponível';
+  end;
+  FStatsPanel.LoadBreeding(LGenderRatio, LEggGroups, LHatchCounter);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);
