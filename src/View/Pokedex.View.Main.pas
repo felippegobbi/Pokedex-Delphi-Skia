@@ -555,7 +555,7 @@ begin
       LPokemon: TPokemon;
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
-      LTypeEffects, LOffensiveEffects: TArray<TTypeEffect>;
+      LTypeEffects: TArray<TTypeEffect>;
       LAbilityName, LAbilityDesc, LAbilityNote, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
       LTypeNames, LTypeList: TArray<string>;
@@ -574,7 +574,6 @@ begin
       LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
-      SetLength(LOffensiveEffects, 0);
       LAbilityName := '';
       LAbilityDesc := '';
       LAbilityNote := '';
@@ -662,7 +661,6 @@ begin
           SetLength(LTypeNames, Length(LPokemon.Types));
           for I := 0 to High(LPokemon.Types) do
             LTypeNames[I] := LPokemon.Types[I].&Type.Name;
-          LOffensiveEffects := FController.GetOffensiveEffectiveness(LTypeNames);
         end;
         if Length(LPokemon.Abilities) > 0 then
         begin
@@ -817,8 +815,7 @@ begin
               FStatsPanel.LoadDescription(LFlavorText);
             FEvolutionPanel.LoadChain(TPokemonController.FilterEvolutionChain
               (LChain, FCurrentId));
-            FStatsPanel.LoadEffects(LTypeEffects, LOffensiveEffects,
-              LAbilityNote);
+            FStatsPanel.LoadEffects(LTypeEffects, LAbilityNote);
             FStatsPanel.ResetMovePool;
             FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
@@ -1400,7 +1397,7 @@ begin
   if Assigned(APokemon.SpeciesData) then
   begin
     if APokemon.SpeciesData.GenderRate < 0 then
-      LGenderRatio := 'Sem gênero'
+      LGenderRatio := 'Sem genero'
     else
     begin
       LFemaleRate := (APokemon.SpeciesData.GenderRate / 8.0) * 100.0;

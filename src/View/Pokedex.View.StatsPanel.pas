@@ -39,7 +39,6 @@ type
     FDescription: string;
     FAbilityDescription: string;
     FDefensiveEffects: TArray<TTypeEffect>;
-    FOffensiveEffects: TArray<TTypeEffect>;
     FMovePool: TArray<TMovePoolSection>;
     FDefenseNote: string;
     FBST: Integer;
@@ -78,8 +77,8 @@ type
       AHatchCounter: string);
     procedure LoadDescription(const AText: string);
     procedure LoadAbilityDescription(const AText: string);
-    procedure LoadEffects(const ADefensiveEffects, AOffensiveEffects
-      : TArray<TTypeEffect>; const ADefenseNote: string = '');
+    procedure LoadEffects(const ADefensiveEffects: TArray<TTypeEffect>;
+      const ADefenseNote: string = '');
     procedure ResetMovePool;
     procedure LoadMovePool(const ASections: TArray<TMovePoolSection>);
     procedure SetMovesLoading(const AValue: Boolean);
@@ -96,12 +95,10 @@ implementation
 const
   MULT_LABELS: array[0..4] of string = ('4X', '2X', '1/2', '1/4', '0X');
   MULT_VALUES: array[0..4] of Single = (4.0, 2.0, 0.5, 0.25, 0.0);
-  OFF_MULT_LABELS: array[0..2] of string = ('2X', '1/2', '0X');
-  OFF_MULT_VALUES: array[0..2] of Single = (2.0, 0.5, 0.0);
-
 const
   MAX_STAT = 180;
   PANEL_PAD = 12;
+  PANEL_TOP_PAD = 7;
   ROW_H = 26;
   BAR_H = 8;
   BAR_R = 4.0;
@@ -129,7 +126,6 @@ begin
   FMovesLoading := False;
   SetLength(FStats, 0);
   SetLength(FDefensiveEffects, 0);
-  SetLength(FOffensiveEffects, 0);
   SetLength(FMovePool, 0);
   OnDraw := DrawStats;
   OnMouseDown := HandleMouseDown;
@@ -177,11 +173,10 @@ begin
   Redraw;
 end;
 
-procedure TStatsPanel.LoadEffects(const ADefensiveEffects, AOffensiveEffects
-  : TArray<TTypeEffect>; const ADefenseNote: string);
+procedure TStatsPanel.LoadEffects(const ADefensiveEffects: TArray<TTypeEffect>;
+  const ADefenseNote: string);
 begin
   FDefensiveEffects := ADefensiveEffects;
-  FOffensiveEffects := AOffensiveEffects;
   FDefenseNote := ADefenseNote;
   Redraw;
 end;
@@ -520,9 +515,31 @@ begin
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
 
+  LY := LY + 20;
+  if FAbilityDescription <> '' then
+  begin
+    LP := MakeParagraph(FAbilityDescription, STATS_FONT_SIZE, $99FFFFFF, True,
+      False, TSkTextAlign.Center, 3);
+    LP.Layout(APanelRect.Width);
+    LP.Paint(ACanvas, APanelRect.Left, LY);
+    LY := LY + LP.Height + 10;
+
+    if (FDescription <> '') and
+      not ((FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '')) then
+    begin
+      LDividerRect := TRectF.Create(APanelRect.Left + 16, LY,
+        APanelRect.Right - 16, LY + 1);
+      LPaint.Style := TSkPaintStyle.Stroke;
+      LPaint.StrokeWidth := 1;
+      LPaint.Color := $22FFFFFF;
+      ACanvas.DrawLine(TPointF.Create(LDividerRect.Left, LY),
+        TPointF.Create(LDividerRect.Right, LY), LPaint);
+      LY := LY + 10;
+    end;
+  end;
+
   if (FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '') then
   begin
-    LY := LY + 22;
     LPaint.Style := TSkPaintStyle.Stroke;
     LPaint.StrokeWidth := 1;
     LPaint.Color := $22FFFFFF;
@@ -563,28 +580,6 @@ begin
     LP.Layout(LLayoutW);
     LP.Paint(ACanvas, APanelRect.Left + 20, LY);
     LY := LY + 26;
-  end;
-
-  LY := LY + 20;
-  if FAbilityDescription <> '' then
-  begin
-    LP := MakeParagraph(FAbilityDescription, STATS_FONT_SIZE, $99FFFFFF, True,
-      False, TSkTextAlign.Center, 3);
-    LP.Layout(APanelRect.Width);
-    LP.Paint(ACanvas, APanelRect.Left, LY);
-    LY := LY + LP.Height + 10;
-
-    if FDescription <> '' then
-    begin
-      LDividerRect := TRectF.Create(APanelRect.Left + 16, LY,
-        APanelRect.Right - 16, LY + 1);
-      LPaint.Style := TSkPaintStyle.Stroke;
-      LPaint.StrokeWidth := 1;
-      LPaint.Color := $22FFFFFF;
-      ACanvas.DrawLine(TPointF.Create(LDividerRect.Left, LY),
-        TPointF.Create(LDividerRect.Right, LY), LPaint);
-      LY := LY + 10;
-    end;
   end;
 
   if FDescription <> '' then
@@ -660,66 +655,6 @@ begin
     end;
   end;
 
-  if Length(FOffensiveEffects) > 0 then
-  begin
-    LPaint.Style := TSkPaintStyle.Stroke;
-    LPaint.StrokeWidth := 1;
-    LPaint.Color := $22FFFFFF;
-    ACanvas.DrawLine(TPointF.Create(APanelRect.Left + 16, LY),
-      TPointF.Create(APanelRect.Right - 16, LY), LPaint);
-    LY := LY + 10;
-
-    LP := MakeParagraph('EFETIVIDADE OFENSIVA', STATS_FONT_SIZE, $88FFFFFF,
-      True, False, TSkTextAlign.Center, 1);
-    LP.Layout(APanelRect.Width);
-    LP.Paint(ACanvas, APanelRect.Left, LY);
-    LY := LY + LP.Height + 6;
-
-    for I := 0 to High(OFF_MULT_LABELS) do
-    begin
-      LHasGroup := False;
-      for LEffect in FOffensiveEffects do
-        if Abs(LEffect.Multiplier - OFF_MULT_VALUES[I]) < 0.01 then
-        begin
-          LHasGroup := True;
-          Break;
-        end;
-      if not LHasGroup then
-        Continue;
-
-      LP := MakeParagraph(OFF_MULT_LABELS[I], STATS_FONT_SIZE, FBarColor, True,
-        False, TSkTextAlign.Left, 1);
-      LP.Layout(34);
-      LP.Paint(ACanvas, APanelRect.Left, LY + 1);
-      LX := APanelRect.Left + 34;
-
-      for LEffect in FOffensiveEffects do
-      begin
-        if Abs(LEffect.Multiplier - OFF_MULT_VALUES[I]) > 0.01 then
-          Continue;
-        LP := MakeParagraph(UpperCase(LEffect.TypeName), STATS_FONT_SIZE,
-          $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
-        LP.Layout(220);
-        LBadgeW := LP.LongestLine + 12;
-        if LX + LBadgeW > APanelRect.Right then
-        begin
-          LX := APanelRect.Left + 34;
-          LY := LY + 20;
-        end;
-        LBadgeRect := TRectF.Create(LX, LY + 2, LX + LBadgeW, LY + 18);
-        LTColor := TPokemonController.GetTypeColor(LEffect.TypeName);
-        LBadgeAlpha := $FF000000 or (DWORD(GetRValue(LTColor)) shl 16) or
-          (DWORD(GetGValue(LTColor)) shl 8) or DWORD(GetBValue(LTColor));
-        LPaint.Style := TSkPaintStyle.Fill;
-        LPaint.Color := LBadgeAlpha;
-        ACanvas.DrawRoundRect(LBadgeRect, 3.5, 3.5, LPaint);
-        LBadgeMidY := (LBadgeRect.Top + LBadgeRect.Bottom) / 2;
-        LP.Paint(ACanvas, LX + 6, LBadgeMidY - LP.Height / 2);
-        LX := LX + LBadgeW + 4;
-      end;
-      LY := LY + 22;
-    end;
-  end;
 end;
 
 procedure TStatsPanel.DrawMovesTab(const ACanvas: ISkCanvas;
@@ -727,7 +662,7 @@ procedure TStatsPanel.DrawMovesTab(const ACanvas: ISkCanvas;
 var
   LY, LX, LBadgeW, LBadgeMidY, LRowHeight, LLevelColW, LColumnGap, LColumnW,
     LMoveRectLeft, LMoveRectRight: Single;
-  J, LSectionIdx, LRowsPerColumn, LColumnIndex, LRowIndex: Integer;
+  J, LSectionIdx, LRowsPerColumn, LColumns, LColumnIndex, LRowIndex: Integer;
   LPaint: ISkPaint;
   LP: ISkParagraph;
   LBadgeRect, LLevelRect, LMoveRect: TRectF;
@@ -782,9 +717,17 @@ begin
 
   LSection := FMovePool[LSectionIdx];
 
-  if FActiveMoveTab = mtLevelUp then
+  if (FActiveMoveTab = mtLevelUp) or (FActiveMoveTab = mtTM) or
+    (FActiveMoveTab = mtEgg) then
   begin
-    LP := MakeParagraph('LISTA POR NIVEL', STATS_FONT_SIZE, FBarColor, True,
+    if FActiveMoveTab = mtLevelUp then
+      LMoveText := 'LISTA POR NIVEL'
+    else if FActiveMoveTab = mtTM then
+      LMoveText := 'LISTA DE TM'
+    else
+      LMoveText := 'LISTA DE EGG';
+
+    LP := MakeParagraph(LMoveText, STATS_FONT_SIZE, FBarColor, True,
       False, TSkTextAlign.Left, 1);
     LP.Layout(APanelRect.Width);
     LP.Paint(ACanvas, APanelRect.Left, LY);
@@ -798,22 +741,45 @@ begin
     LY := LY + 10;
 
     LRowHeight := 24;
-    LLevelColW := 56;
+    if FActiveMoveTab = mtLevelUp then
+      LLevelColW := 56
+    else
+      LLevelColW := 0;
     LColumnGap := 12;
+    LColumns := 1;
     LRowsPerColumn := Max(1, Trunc((APanelRect.Bottom - LY) / LRowHeight));
-    if (Length(LSection.Moves) > LRowsPerColumn) and (LRowsPerColumn > 0) then
-      LRowsPerColumn := Max(LRowsPerColumn, Ceil(Length(LSection.Moves) / 2));
     if Length(LSection.Moves) > LRowsPerColumn then
-      LColumnW := (APanelRect.Width - LColumnGap) / 2
+      LColumns := Min(4, Ceil(Length(LSection.Moves) / LRowsPerColumn));
+    LRowsPerColumn := Max(1, Ceil(Length(LSection.Moves) / LColumns));
+    if LColumns > 1 then
+      LColumnW := (APanelRect.Width - (LColumns - 1) * LColumnGap) / LColumns
     else
       LColumnW := APanelRect.Width;
+    if LColumnW < 92 then
+    begin
+      LColumns := Max(1, Min(4, Trunc((APanelRect.Width + LColumnGap) /
+        (92 + LColumnGap))));
+      LRowsPerColumn := Max(1, Ceil(Length(LSection.Moves) / LColumns));
+      if LColumns > 1 then
+        LColumnW := (APanelRect.Width - (LColumns - 1) * LColumnGap) / LColumns
+      else
+        LColumnW := APanelRect.Width;
+    end;
 
     for J := 0 to High(LSection.Moves) do
     begin
       LMoveText := LSection.Moves[J];
-      if not SplitLevelMove(LMoveText, LLevelLabel, LMoveName) then
+      if FActiveMoveTab = mtLevelUp then
       begin
-        LLevelLabel := 'MOVE';
+        if not SplitLevelMove(LMoveText, LLevelLabel, LMoveName) then
+        begin
+          LLevelLabel := 'MOVE';
+          LMoveName := LMoveText;
+        end;
+      end
+      else
+      begin
+        LLevelLabel := LSection.Title;
         LMoveName := LMoveText;
       end;
 
@@ -821,69 +787,59 @@ begin
       LRowIndex := J mod LRowsPerColumn;
       LX := APanelRect.Left + LColumnIndex * (LColumnW + LColumnGap);
 
-      LLevelRect := TRectF.Create(LX, LY + (LRowIndex * LRowHeight),
-        LX + LLevelColW, LY + (LRowIndex * LRowHeight) + 18);
-      LMoveRectLeft := LLevelRect.Right + 6;
-      LMoveRectRight := Min(APanelRect.Right, LX + LColumnW);
-      LMoveRect := TRectF.Create(LMoveRectLeft, LLevelRect.Top,
-        LMoveRectRight, LLevelRect.Bottom);
+      if FActiveMoveTab = mtLevelUp then
+      begin
+        LLevelRect := TRectF.Create(LX, LY + (LRowIndex * LRowHeight),
+          LX + LLevelColW, LY + (LRowIndex * LRowHeight) + 18);
+        LMoveRectLeft := LLevelRect.Right + 6;
+        LMoveRectRight := Min(APanelRect.Right, LX + LColumnW);
+        LMoveRect := TRectF.Create(LMoveRectLeft, LLevelRect.Top,
+          LMoveRectRight, LLevelRect.Bottom);
 
-      LPaint.Style := TSkPaintStyle.Fill;
-      LPaint.Color := $14FFFFFF;
-      ACanvas.DrawRoundRect(LLevelRect, 3.5, 3.5, LPaint);
+        LPaint.Style := TSkPaintStyle.Fill;
+        LPaint.Color := $14FFFFFF;
+        ACanvas.DrawRoundRect(LLevelRect, 3.5, 3.5, LPaint);
 
-      LTypeColor := GetMoveTypeColor(LSection, J);
-      if LTypeColor = $1CFFFFFF then
-        LPaint.Color := $1CFFFFFF
+        LTypeColor := GetMoveTypeColor(LSection, J);
+        if LTypeColor = $1CFFFFFF then
+          LPaint.Color := $1CFFFFFF
+        else
+          LPaint.Color := LTypeColor;
+        ACanvas.DrawRoundRect(LMoveRect, 3.5, 3.5, LPaint);
+
+        LP := MakeParagraph(LLevelLabel, STATS_FONT_SIZE, $CCFFFFFF, True,
+          False, TSkTextAlign.Center, 1);
+        LP.Layout(LLevelRect.Width);
+        LP.Paint(ACanvas, LLevelRect.Left,
+          LLevelRect.Top + (LLevelRect.Height - LP.Height) / 2);
+
+        LP := MakeParagraph(UpperCase(LMoveName), STATS_FONT_SIZE, $FFFFFFFF,
+          True, False, TSkTextAlign.Left, 1);
+        LP.Layout(Max(20, LMoveRect.Width - 12));
+        LBadgeMidY := (LMoveRect.Top + LMoveRect.Bottom) / 2;
+        LP.Paint(ACanvas, LMoveRect.Left + 6, LBadgeMidY - LP.Height / 2);
+      end
       else
-        LPaint.Color := LTypeColor;
-      ACanvas.DrawRoundRect(LMoveRect, 3.5, 3.5, LPaint);
+      begin
+        LBadgeRect := TRectF.Create(LX, LY + (LRowIndex * LRowHeight),
+          Min(APanelRect.Right, LX + LColumnW),
+          LY + (LRowIndex * LRowHeight) + 18);
+        LPaint.Style := TSkPaintStyle.Fill;
+        LTypeColor := GetMoveTypeColor(LSection, J);
+        if LTypeColor = $1CFFFFFF then
+          LPaint.Color := $1CFFFFFF
+        else
+          LPaint.Color := LTypeColor;
+        ACanvas.DrawRoundRect(LBadgeRect, 3.5, 3.5, LPaint);
 
-      LP := MakeParagraph(LLevelLabel, STATS_FONT_SIZE, $CCFFFFFF, True, False,
-        TSkTextAlign.Center, 1);
-      LP.Layout(LLevelRect.Width);
-      LP.Paint(ACanvas, LLevelRect.Left,
-        LLevelRect.Top + (LLevelRect.Height - LP.Height) / 2);
-
-      LP := MakeParagraph(UpperCase(LMoveName), STATS_FONT_SIZE, $FFFFFFFF,
-        True, False, TSkTextAlign.Left, 1);
-      LP.Layout(Max(20, LMoveRect.Width - 12));
-      LBadgeMidY := (LMoveRect.Top + LMoveRect.Bottom) / 2;
-      LP.Paint(ACanvas, LMoveRect.Left + 6, LBadgeMidY - LP.Height / 2);
+        LBadgeMidY := (LBadgeRect.Top + LBadgeRect.Bottom) / 2;
+        LP := MakeParagraph(UpperCase(LMoveName), STATS_FONT_SIZE, $FFFFFFFF,
+          True, False, TSkTextAlign.Left, 1);
+        LP.Layout(Max(20, LBadgeRect.Width - 12));
+        LP.Paint(ACanvas, LBadgeRect.Left + 6, LBadgeMidY - LP.Height / 2);
+      end;
     end;
     Exit;
-  end;
-
-  LP := MakeParagraph(LSection.Title, STATS_FONT_SIZE, FBarColor, True, False,
-    TSkTextAlign.Left, 1);
-  LP.Layout(72);
-  LP.Paint(ACanvas, APanelRect.Left, LY + 2);
-
-  LX := APanelRect.Left + 72;
-  for J := 0 to High(LSection.Moves) do
-  begin
-    LP := MakeParagraph(UpperCase(LSection.Moves[J]), STATS_FONT_SIZE,
-      $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
-    LP.Layout(APanelRect.Width);
-    LBadgeW := Min(APanelRect.Width - 76, LP.LongestLine + 12);
-    if LX + LBadgeW > APanelRect.Right then
-    begin
-      LX := APanelRect.Left + 72;
-      LY := LY + 20;
-    end;
-
-    LBadgeRect := TRectF.Create(LX, LY + 2, LX + LBadgeW, LY + 18);
-    LPaint.Style := TSkPaintStyle.Fill;
-    LTypeColor := GetMoveTypeColor(LSection, J);
-    if LTypeColor = $1CFFFFFF then
-      LPaint.Color := $1CFFFFFF
-    else
-      LPaint.Color := LTypeColor;
-    ACanvas.DrawRoundRect(LBadgeRect, 3.5, 3.5, LPaint);
-
-    LBadgeMidY := (LBadgeRect.Top + LBadgeRect.Bottom) / 2;
-    LP.Paint(ACanvas, LX + 6, LBadgeMidY - LP.Height / 2);
-    LX := LX + LBadgeW + 4;
   end;
 end;
 
@@ -893,7 +849,7 @@ var
   LPanelRect, LContentRect: TRectF;
   LPaint: ISkPaint;
 begin
-  LPanelRect := TRectF.Create(ADest.Left + PANEL_PAD, ADest.Top + PANEL_PAD,
+  LPanelRect := TRectF.Create(ADest.Left + PANEL_PAD, ADest.Top + PANEL_TOP_PAD,
     ADest.Right - PANEL_PAD, ADest.Bottom - PANEL_PAD);
 
   LPaint := TSkPaint.Create;

@@ -25,6 +25,36 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - **Species model expansion**: `TPokemonSpecies` now maps `gender_rate`, `egg_groups` and `hatch_counter`, making breeding metadata available without adding a new network flow.
 - **Expansão do modelo de species**: `TPokemonSpecies` agora mapeia `gender_rate`, `egg_groups` e `hatch_counter`, deixando os metadados de breeding disponíveis sem adicionar um novo fluxo de rede.
 
+## [5.7.1] - 2026-04-23
+
+### Changed / Alterado
+
+- **Stats panel top alignment**: The stats panel top inset was reduced so its top edge aligns visually with the search bar.
+- **Alinhamento superior do painel de stats**: O recuo superior do painel de stats foi reduzido para alinhar visualmente seu topo com a barra de busca.
+- **TM and Egg list layout**: The `TM` and `EGG` subtabs now use the same responsive list presentation already adopted by `LEVEL`.
+- **Layout em lista para TM e Egg**: As subabas `TM` e `EGG` agora usam a mesma apresentação responsiva em lista já adotada por `LEVEL`.
+
+### Removed / Removido
+
+- **Offensive effectiveness panel**: The offensive type chart was removed because it implied fixed offensive coverage from native typing alone, which is misleading when a Pokemon can learn moves of many unrelated types.
+- **Painel de efetividade ofensiva**: O chart ofensivo de tipos foi removido porque implicava uma cobertura ofensiva fixa apenas pela tipagem nativa, o que é enganoso quando um Pokémon pode aprender golpes de muitos tipos não relacionados.
+
+## [5.7.2] - 2026-04-23
+
+### Changed / Alterado
+
+- **Move lists expanded to 3 columns**: The learning panel now distributes `LEVEL`, `TM` and `EGG` entries across up to three columns when needed, preventing moves from being visually suppressed on dense species.
+- **Listas de golpes com até 3 colunas**: O painel de aprendizagem agora distribui entradas de `LEVEL`, `TM` e `EGG` em até três colunas quando necessário, evitando que golpes fiquem visualmente suprimidos em espécies densas.
+- **TM and Egg chips removed**: The `TM` and `EGG` subtabs now render plain responsive move chips instead of repeating section labels inside every row.
+- **Remoção dos chips de TM e Egg**: As subabas `TM` e `EGG` agora renderizam chips responsivos simples em vez de repetir os rótulos de seção em cada linha.
+
+## [5.7.3] - 2026-04-23
+
+### Changed / Alterado
+
+- **Move list density increased to 4 columns**: The move-learning grid now expands up to four columns when a species has a very dense movepool, reducing clipped chips.
+- **Densidade da lista de golpes aumentada para 4 colunas**: A grade de aprendizagem de golpes agora se expande em até quatro colunas quando a espécie tem um movepool muito denso, reduzindo chips cortados.
+
 ## [5.6.0] - 2026-04-23
 
 ### Added / Adicionado

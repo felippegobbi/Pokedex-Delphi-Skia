@@ -39,8 +39,6 @@ type
     function GetTypeEffectiveness(const ATypeNames: TArray<string>;
       const AAbilityName: string = '')
       : TArray<TTypeEffect>;
-    function GetOffensiveEffectiveness(const ATypeNames: TArray<string>)
-      : TArray<TTypeEffect>;
     function GetAbilityDescription(const AName, ALang: string): string;
     class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
       const AActivePokemonId: Integer): TArray<TEvolutionNode>;
@@ -909,107 +907,6 @@ begin
       Result[J + 1] := LTmp;
     end;
 
-  finally
-    LMap.Free;
-  end;
-end;
-
-function TPokemonController.GetOffensiveEffectiveness(const ATypeNames
-  : TArray<string>): TArray<TTypeEffect>;
-const
-  ALL_TYPES: array [0 .. 17] of string = ('normal', 'fire', 'water', 'electric',
-    'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
-    'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy');
-var
-  LMap: TDictionary<string, Single>;
-  LJson, LTypeName: string;
-  LRoot: TJSONValue;
-  LObj, LRelObj: TJSONObject;
-  I, J, LCount: Integer;
-  LPair: TPair<string, Single>;
-  LTmp: TTypeEffect;
-
-  procedure ApplyBest(const AKey: string; AMult: Single);
-  var
-    LArr2: TJSONArray;
-    LItem2: TJSONValue;
-    LName2: string;
-    LVal: Single;
-  begin
-    LArr2 := TJSONArray(LRelObj.GetValue(AKey));
-    if not Assigned(LArr2) then
-      Exit;
-    for LItem2 in LArr2 do
-      if LItem2 is TJSONObject then
-      begin
-        LName2 := TJSONObject(LItem2).GetValue<string>('name');
-        if LMap.TryGetValue(LName2, LVal) then
-          if AMult > LVal then
-            LMap[LName2] := AMult;
-      end;
-  end;
-
-begin
-  SetLength(Result, 0);
-  LMap := TDictionary<string, Single>.Create;
-  try
-    for LTypeName in ALL_TYPES do
-      LMap.Add(LTypeName, 1.0);
-
-    for I := 0 to High(ATypeNames) do
-    begin
-      try
-        LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/type/' +
-          LowerCase(ATypeNames[I]));
-        LRoot := TJSONObject.ParseJSONValue(LJson);
-        if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
-        begin
-          if Assigned(LRoot) then
-            LRoot.Free;
-          Continue;
-        end;
-        LObj := TJSONObject(LRoot);
-        try
-          LRelObj := TJSONObject(LObj.GetValue('damage_relations'));
-          if Assigned(LRelObj) then
-          begin
-            ApplyBest('double_damage_to', 2.0);
-            ApplyBest('half_damage_to', 0.5);
-            ApplyBest('no_damage_to', 0.0);
-          end;
-        finally
-          LObj.Free;
-        end;
-      except
-        // type data is non-critical, continue with partial result
-      end;
-    end;
-
-    LCount := 0;
-    for LPair in LMap do
-      if Abs(LPair.Value - 1.0) > 0.01 then
-        Inc(LCount);
-    SetLength(Result, LCount);
-    LCount := 0;
-    for LPair in LMap do
-      if Abs(LPair.Value - 1.0) > 0.01 then
-      begin
-        Result[LCount].TypeName := LPair.Key;
-        Result[LCount].Multiplier := LPair.Value;
-        Inc(LCount);
-      end;
-
-    for I := 1 to High(Result) do
-    begin
-      LTmp := Result[I];
-      J := I - 1;
-      while (J >= 0) and (Result[J].Multiplier < LTmp.Multiplier) do
-      begin
-        Result[J + 1] := Result[J];
-        Dec(J);
-      end;
-      Result[J + 1] := LTmp;
-    end;
   finally
     LMap.Free;
   end;

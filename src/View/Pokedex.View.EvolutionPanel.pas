@@ -7,6 +7,7 @@ uses
   System.Classes,
   System.UITypes,
   System.Math,
+  Winapi.Windows,
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
   Vcl.Controls,
@@ -37,6 +38,7 @@ type
     function FormatTrigger(const ATrigger: TEvolutionTrigger): string;
     function FormatItemName(const AName: string): string;
     function CapitalizeName(const AName: string): string;
+    function GetHighlightColor: TAlphaColor;
     function MakeParagraph(const AText: string; AFontSize: Single;
       AColor: TAlphaColor; ABold: Boolean): ISkParagraph;
   public
@@ -210,6 +212,24 @@ begin
   Result := string.Join('-', LParts);
 end;
 
+function TEvolutionPanel.GetHighlightColor: TAlphaColor;
+var
+  LR, LG, LB, LLum, LBoost: Integer;
+begin
+  LR := GetRValue(FThemeColor and $00FFFFFF);
+  LG := GetGValue(FThemeColor and $00FFFFFF);
+  LB := GetBValue(FThemeColor and $00FFFFFF);
+  LLum := Round(0.2126 * LR + 0.7152 * LG + 0.0722 * LB);
+  if LLum >= 120 then
+    Exit(FThemeColor);
+
+  LBoost := 120 - LLum;
+  LR := Min(255, LR + LBoost);
+  LG := Min(255, LG + LBoost);
+  LB := Min(255, LB + LBoost);
+  Result := $FF000000 or (DWORD(LR) shl 16) or (DWORD(LG) shl 8) or DWORD(LB);
+end;
+
 function TEvolutionPanel.FormatTrigger(const ATrigger
   : TEvolutionTrigger): string;
 begin
@@ -300,6 +320,7 @@ var
   LSpriteX_L, LSpriteX_R: Single;
   LBracketX_L, LBracketX_R: Single;
   LMinYL, LMaxYL, LMinYR, LMaxYR: Single;
+  LHighlightColor: TAlphaColor;
 begin
   LCount := Length(FNodes);
   if LCount = 0 then
@@ -465,6 +486,7 @@ begin
   ACanvas.Save;
   ACanvas.ClipRect(LPanelRect, TSkClipOp.Intersect, False);
   LGrayFilter := TSkColorFilter.MakeMatrix(GRAYSCALE_MATRIX);
+  LHighlightColor := GetHighlightColor;
 
   LPaint.Style := TSkPaintStyle.Stroke;
   LPaint.StrokeWidth := 1.5;
@@ -618,6 +640,14 @@ begin
 
       ACanvas.DrawImageRect(FImages[I], LImgRect, TSkSamplingOptions.Create(TSkFilterMode.Linear, TSkMipmapMode.None), LPaint);
       LPaint.ColorFilter := nil;
+      if FNodes[I].IsActive then
+      begin
+        LPaint.Style := TSkPaintStyle.Stroke;
+        LPaint.StrokeWidth := 2;
+        LPaint.Color := LHighlightColor;
+        ACanvas.DrawCircle(LCx[I], LCy[I], LImgSize / 2 - 1, LPaint);
+        LPaint.Style := TSkPaintStyle.Fill;
+      end;
     end
     else
     begin
@@ -642,7 +672,7 @@ begin
     end;
 
     if FNodes[I].IsActive then
-      LNameColor := FThemeColor
+      LNameColor := LHighlightColor
     else
       LNameColor := $AAFFFFFF;
     LParagraph := MakeParagraph(CapitalizeName(FNodes[I].Name), LNameFontSize,
