@@ -3,6 +3,102 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## [5.5.0] - 2026-04-22
+
+### Added / Adicionado
+- **Search loading state**: The search bar and main sprite panel now show an animated loading indicator while a Pokémon search is in progress, making network wait time explicit instead of looking frozen.
+- **Estado de carregamento da busca**: A barra de busca e o painel principal do sprite agora exibem um indicador animado enquanto a busca do Pokémon está em andamento, deixando o tempo de espera de rede explícito em vez de parecer travado.
+- **Evolution sprite loading feedback**: Evolution nodes now distinguish between loading and failure states, rendering `CARREGANDO...` while the sprite is being fetched and `SEM SPRITE` when it cannot be loaded.
+- **Feedback de carregamento dos sprites de evolução**: Os nós da evolução agora distinguem estados de carregamento e falha, renderizando `CARREGANDO...` enquanto o sprite é buscado e `SEM SPRITE` quando ele não pode ser carregado.
+
+### Changed / Alterado
+- **Stats panel typography**: All text inside `TStatsPanel` now uses a unified font size (`STATS_FONT_SIZE = 9.5`) for labels, values, descriptions and defensive-effectiveness badges, creating a more consistent reading rhythm.
+- **Tipografia do painel de stats**: Todo o texto dentro de `TStatsPanel` agora usa um tamanho de fonte unificado (`STATS_FONT_SIZE = 9.5`) para labels, valores, descrições e badges de efetividade defensiva, criando um ritmo visual mais consistente.
+- **Loading accent color**: The loading spinner highlight now uses a Pokéball-inspired red instead of yellow, better matching the app's visual language.
+- **Cor de destaque do loading**: O destaque do spinner de carregamento agora usa um vermelho inspirado em Pokébola em vez de amarelo, combinando melhor com a linguagem visual do app.
+
+### Fixed / Corrigido
+- **Infinite HTTP waits**: All relevant `TNetHTTPClient` calls now use explicit connection and response timeouts (`10000 ms`), avoiding hangs when PokeAPI or the translation endpoint becomes unavailable.
+- **Espera infinita em HTTP**: Todas as chamadas relevantes de `TNetHTTPClient` agora usam timeouts explícitos de conexão e resposta (`10000 ms`), evitando travamentos quando a PokeAPI ou o endpoint de tradução ficam indisponíveis.
+- **Search race condition**: Concurrent searches are now protected by a request-generation token (`FActiveSearchRequest`), so stale background responses can no longer overwrite the most recent Pokémon on screen.
+- **Race condition na busca**: Buscas concorrentes agora são protegidas por um token de geração de requisição (`FActiveSearchRequest`), impedindo que respostas antigas de background sobrescrevam o Pokémon mais recente na tela.
+- **Silent shiny fallback**: If a shiny sprite is missing or fails to download, the UI falls back to the normal sprite and informs the user instead of leaving stale art visible.
+- **Fallback shiny silencioso**: Se um sprite shiny estiver ausente ou falhar no download, a interface volta para o sprite normal e informa o usuário em vez de deixar a arte anterior visível.
+- **Oval search spinner**: The search spinner bounding box is now forced to a square rect, preventing the circular indicator from rendering as an ellipse in the search bar.
+- **Spinner oval na busca**: A área de desenho do spinner da busca agora é forçada para um retângulo quadrado, impedindo que o indicador circular seja renderizado como elipse na barra de busca.
+
+---
+
+## [5.4.0] - 2026-04-22
+
+### Added / Adicionado
+- **Search history overlay**: Focusing the search input now opens a hoverable/clickable history overlay with recent searches, making repeated lookups faster.
+- **Overlay de histórico de busca**: Focar o campo de busca agora abre um overlay com hover/click contendo buscas recentes, acelerando consultas repetidas.
+- **Type filtering by badge click**: Clicking a type badge filters the navigation flow to Pokémon of that type through `GetPokemonByType`, with filtered progress reflected in the ID label.
+- **Filtro por tipo via clique no badge**: Clicar em um badge de tipo filtra a navegação para Pokémon daquele tipo via `GetPokemonByType`, com o progresso do filtro refletido no label de ID.
+- **Favorites system**: Added persistent favorites with toggle, favorite-mode navigation and star icons integrated into the main image panel.
+- **Sistema de favoritos**: Adicionados favoritos persistidos com toggle, modo de navegação por favoritos e ícones de estrela integrados ao painel principal da imagem.
+
+### Changed / Alterado
+- **Filter/favorite context in header**: The dedicated filter label was removed; filtered context is now embedded directly in `FIdLabel` (`#025 · FIRE 3/30`, `FAV 2/8`), reducing UI clutter.
+- **Contexto de filtro/favorito no cabeçalho**: O label dedicado de filtro foi removido; o contexto filtrado agora é embutido diretamente em `FIdLabel` (`#025 · FIRE 3/30`, `FAV 2/8`), reduzindo poluição visual.
+- **Ability description language handling**: `GetAbilityDescription` now accepts the current language and falls back to English when the target language is unavailable.
+- **Tratamento de idioma na descrição de habilidade**: `GetAbilityDescription` agora aceita o idioma atual e faz fallback para inglês quando o idioma alvo não está disponível.
+- **Translation flow restored**: Locale mapping was corrected so native PokeAPI languages stay native and `pt-BR` continues to use MyMemory only as fallback.
+- **Fluxo de tradução restaurado**: O mapeamento de locale foi corrigido para que idiomas nativos da PokeAPI permaneçam nativos e `pt-BR` continue usando MyMemory apenas como fallback.
+
+### Fixed / Corrigido
+- **Alternative-form contamination in type results**: Type-based search now excludes IDs above `1025`, preventing alternate forms from polluting the standard Pokédex flow.
+- **Contaminação por formas alternativas nos resultados por tipo**: A busca por tipo agora exclui IDs acima de `1025`, impedindo que formas alternativas poluam o fluxo padrão da Pokédex.
+- **Favorite icon guards**: Favorite UI updates now include nil-safety checks and a proper initial SVG setup for `FFavModeIcon`, avoiding inconsistent startup rendering.
+- **Guards no ícone de favoritos**: As atualizações da UI de favoritos agora incluem verificações de nil e configuração inicial correta do SVG de `FFavModeIcon`, evitando renderizações inconsistentes na inicialização.
+- **Repository cleanup**: IDE `__recovery` artifacts were removed from source control in this sprint branch.
+- **Limpeza do repositório**: Artefatos `__recovery` da IDE foram removidos do controle de versão nesta branch da sprint.
+
+---
+
+## [5.3.0] - 2026-04-21
+
+### Added / Adicionado
+- **Built-in translation fallback**: Flavor text and ability descriptions can now be auto-translated through MyMemory when the system language is not natively supported by PokeAPI.
+- **Fallback interno de tradução**: Flavor text e descrições de habilidade agora podem ser traduzidos automaticamente via MyMemory quando o idioma do sistema não é suportado nativamente pela PokeAPI.
+- **BST total row**: The stats panel now shows a `TOTAL` row summarizing base stat total (`BST`) in the same panel.
+- **Linha de total de BST**: O painel de stats agora exibe uma linha `TOTAL` resumindo o total de stats base (`BST`) no mesmo painel.
+- **Defensive effectiveness header**: The merged effectiveness area gained an explicit section heading (`EFETIVIDADE DEFENSIVA`) for clearer scanning.
+- **Cabeçalho de efetividade defensiva**: A área de efetividade mesclada passou a ter um cabeçalho explícito (`EFETIVIDADE DEFENSIVA`) para melhorar a leitura.
+
+### Changed / Alterado
+- **Equidistant left-panel layout**: The left column (ID, name, type badges, sprite and shiny button) was rebalanced to keep vertical spacing more even.
+- **Layout equidistante no painel esquerdo**: A coluna esquerda (ID, nome, badges de tipo, sprite e botão shiny) foi reequilibrada para manter espaçamento vertical mais uniforme.
+- **Type chart merged into stats panel**: Defensive type effectiveness was moved into `TStatsPanel`, eliminating the gap and redundancy of a separate panel.
+- **Type chart integrado ao painel de stats**: A efetividade defensiva de tipos foi movida para `TStatsPanel`, eliminando a lacuna e redundância de um painel separado.
+- **Sprite rendering path**: Main sprite rendering now uses `ISkImage`/`MakeFromEncoded` inside a single `TSkPaintBox`, which also enabled a composited Pokéball watermark without the old HWND artifact.
+- **Fluxo de renderização do sprite**: A renderização do sprite principal agora usa `ISkImage`/`MakeFromEncoded` dentro de um único `TSkPaintBox`, o que também permitiu uma marca d'água de Pokébola composta sem o antigo artefato de HWND.
+- **Shiny control and identity badges**: `VER SHINY` became a pill button and the Pokémon ID gained a dedicated badge treatment.
+- **Controle shiny e badge de identidade**: `VER SHINY` virou um botão pill e o ID do Pokémon ganhou tratamento visual próprio de badge.
+- **Evolution and type name capitalization**: Labels for evolution nodes and type names now display with normalized capitalization.
+- **Capitalização de nomes de evolução e tipos**: Os labels dos nós de evolução e nomes de tipos agora exibem capitalização normalizada.
+
+---
+
+## [5.2.0] - 2026-04-21
+
+### Added / Adicionado
+- **Defensive type effectiveness chart**: Added type-effectiveness calculation and rendering, showing what damages the current Pokémon for 4x, 2x, 1/2x, 1/4x and 0x.
+- **Chart de efetividade defensiva**: Adicionado cálculo e renderização de efetividade de tipos, mostrando o que causa dano 4x, 2x, 1/2x, 1/4x e 0x no Pokémon atual.
+- **`TTypeEffect` model and controller flow**: Introduced data structures and controller logic to aggregate multipliers across one or two defensive types using PokeAPI `damage_relations`.
+- **Modelo `TTypeEffect` e fluxo no controller**: Introduzidos estruturas de dados e lógica no controller para agregar multiplicadores entre um ou dois tipos defensivos usando `damage_relations` da PokeAPI.
+- **Horizontal stats panel**: The old radial stats layout was replaced with horizontal bars, opening room for more textual information and type-effectiveness data.
+- **Painel de stats horizontal**: O antigo layout radial de stats foi substituído por barras horizontais, abrindo espaço para mais informação textual e dados de efetividade de tipos.
+
+### Changed / Alterado
+- **Main layout polish**: The main view and stats panel were reorganized to support the new type chart and denser information layout.
+- **Polimento do layout principal**: A view principal e o painel de stats foram reorganizados para suportar o novo chart de tipos e uma densidade maior de informação.
+- **Service contract**: The service/controller stack now includes the extra type endpoint flow needed for effectiveness lookup.
+- **Contrato de serviço**: A pilha service/controller agora inclui o fluxo extra de endpoint de tipos necessário para a consulta de efetividade.
+
+---
+
 ## [5.1.1] - 2026-04-20
 
 ### Fixed / Corrigido
