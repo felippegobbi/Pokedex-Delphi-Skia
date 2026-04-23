@@ -30,6 +30,7 @@ implementation
 
 const
   BASE_URL = 'https://pokeapi.co/api/v2';
+  HTTP_TIMEOUT_MS = 10000;
 
 function TdmPokeService.DoGet(const AUrl: string): string;
 var
@@ -38,6 +39,8 @@ var
 begin
   LHttp := TNetHTTPClient.Create(nil);
   try
+    LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
+    LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
     try
       LResponse := LHttp.Get(AUrl);
     except

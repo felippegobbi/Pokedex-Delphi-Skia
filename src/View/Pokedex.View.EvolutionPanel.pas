@@ -16,10 +16,13 @@ uses
   Pokedex.Model.Pokemon;
 
 type
+  TEvolutionImageState = (eisIdle, eisLoading, eisLoaded, eisFailed);
+
   TEvolutionPanel = class(TSkPaintBox)
   private
     FNodes: TArray<TEvolutionNode>;
     FImages: TArray<ISkImage>;
+    FImageStates: TArray<TEvolutionImageState>;
     FNodeRects: TArray<TRectF>;
     FThemeColor: TAlphaColor;
     FFontFamily: string;
@@ -53,6 +56,7 @@ const
   FAN_BRACKET_INSET = 235.0; // vertical bracket bar from panel edge
   FAN_IMG_SIZE = 36.0; // sprite size for fan evolutions
   DARK_BG: TAlphaColor = $FF2A2A2A;
+  HTTP_TIMEOUT_MS = 10000;
   GRAYSCALE_MATRIX: TSkColorMatrix = (M11: 0.299; M12: 0.587; M13: 0.114;
     M14: 0; M15: 0; M21: 0.299; M22: 0.587; M23: 0.114; M24: 0; M25: 0;
     M31: 0.299; M32: 0.587; M33: 0.114; M34: 0; M35: 0; M41: 0; M42: 0; M43: 0;
@@ -66,6 +70,7 @@ begin
   FGeneration := 0;
   SetLength(FNodes, 0);
   SetLength(FImages, 0);
+  SetLength(FImageStates, 0);
   SetLength(FNodeRects, 0);
   OnDraw := DrawEvolution;
   OnMouseDown := HandleMouseDown;
@@ -80,9 +85,16 @@ begin
   Inc(FGeneration);
   LGen := FGeneration;
   SetLength(FImages, Length(ANodes));
+  SetLength(FImageStates, Length(ANodes));
   SetLength(FNodeRects, Length(ANodes));
   for I := 0 to High(FImages) do
+  begin
     FImages[I] := nil;
+    if FNodes[I].SpriteUrl.IsEmpty then
+      FImageStates[I] := eisFailed
+    else
+      FImageStates[I] := eisLoading;
+  end;
   Redraw;
   for I := 0 to High(FNodes) do
     if not FNodes[I].SpriteUrl.IsEmpty then
@@ -104,6 +116,8 @@ begin
       LHttp := TNetHTTPClient.Create(nil);
       LStream := TMemoryStream.Create;
       try
+        LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
+        LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
         try
           LHttp.Get(AUrl, LStream);
           if LStream.Size > 0 then
@@ -128,6 +142,10 @@ begin
           if AIndex < Length(FImages) then
           begin
             FImages[AIndex] := LImage;
+            if Assigned(LImage) then
+              FImageStates[AIndex] := eisLoaded
+            else
+              FImageStates[AIndex] := eisFailed;
             Redraw;
           end;
         end));
@@ -603,12 +621,24 @@ begin
     end
     else
     begin
+      LPaint.Style := TSkPaintStyle.Stroke;
+      LPaint.StrokeWidth := 1.5;
       if FNodes[I].IsActive then
-        LPaint.Color := FThemeColor
+        LPaint.Color := $66FFFFFF
       else
         LPaint.Color := $33FFFFFF;
-
       ACanvas.DrawCircle(LCx[I], LCy[I], LImgSize / 2 - 2, LPaint);
+
+      if (I < Length(FImageStates)) and (FImageStates[I] = eisLoading) then
+        LText := 'CARREGANDO...'
+      else
+        LText := 'SEM SPRITE';
+      LParagraph := MakeParagraph(LText, Max(6.5, LTriggerFontSize - 0.5),
+        $99FFFFFF, True);
+      LParagraph.Layout(Max(56.0, LTextW));
+      LParagraph.Paint(ACanvas, LCx[I] - Max(56.0, LTextW) / 2,
+        LCy[I] - LParagraph.Height / 2);
+      LPaint.Style := TSkPaintStyle.Fill;
     end;
 
     if FNodes[I].IsActive then
