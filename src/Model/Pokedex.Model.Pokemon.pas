@@ -101,6 +101,12 @@ type
     function GetDescription(const ALang: string = 'en'): string;
   end;
 
+  TMovePoolSection = record
+    Title: string;
+    Moves: TArray<string>;
+    Types: TArray<string>;
+  end;
+
   TPokemon = class
   private
     [JSONName('id')]
@@ -122,6 +128,7 @@ type
     [JSONName('stats')]
     FStats: TArray<TStatEntry>;
     FSpeciesData: TPokemonSpecies;
+    FMovePool: TArray<TMovePoolSection>;
     function GetSpriteUrl: string;
 
   public
@@ -135,6 +142,7 @@ type
     property Species: TApiResource read FSpecies write FSpecies;
     property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
     property Stats: TArray<TStatEntry> read FStats write FStats;
+    property MovePool: TArray<TMovePoolSection> read FMovePool write FMovePool;
     property SpriteUrl: string read GetSpriteUrl;
     function ShinySpriteUrl: string;
     constructor Create;

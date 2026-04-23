@@ -81,6 +81,7 @@ type
     FLoadingTick: Integer;
     FLoadingTimer: TTimer;
     FActiveSearchRequest: Int64;
+    FActiveMovePoolRequest: Int64;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -93,6 +94,7 @@ type
     procedure SetupLayout;
     procedure SetupSearchBar;
     procedure SetupHistoryOverlay;
+    procedure HideHistoryPanel;
     procedure SetupStatsPanel;
     procedure SetupEvolutionPanel;
     procedure ShinyIconClick(Sender: TObject);
@@ -113,6 +115,8 @@ type
     procedure FavBtnClick(Sender: TObject);
     procedure FavModeClick(Sender: TObject);
     procedure UpdateFavIcons;
+    procedure StatsPanelMovesTabRequested(Sender: TObject);
+    procedure StatsPanelInteracted(Sender: TObject);
     procedure SetLoading(const AValue: Boolean);
     procedure LoadingTimerTick(Sender: TObject);
     procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
@@ -206,6 +210,15 @@ end;
 
 procedure TPokedexView.SetupLayout;
 begin
+  if Width < 980 then
+    Width := 980;
+  if Height < 820 then
+    Height := 820;
+  Constraints.MinWidth := 980;
+  Constraints.MinHeight := 820;
+  pnlTopContainer.Align := alNone;
+  pnlTopContainer.SetBounds(0, 0, 368, SEARCH_H + (SEARCH_T * 2));
+  pnlTopContainer.Anchors := [akLeft, akTop];
   pnlTopContainer.Height := SEARCH_H + (SEARCH_T * 2);
   pnlTopContainer.BringToFront;
 
@@ -402,10 +415,11 @@ procedure TPokedexView.SetupStatsPanel;
 begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
-  FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
-    pnlInfo.Height - pnlTopContainer.Height);
+  FStatsPanel.SetBounds(0, 0, pnlInfo.Width, pnlInfo.Height);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
+  FStatsPanel.OnInteract := StatsPanelInteracted;
+  FStatsPanel.OnMovesTabRequested := StatsPanelMovesTabRequested;
 end;
 
 procedure TPokedexView.SetupEvolutionPanel;
@@ -420,6 +434,13 @@ begin
     begin
       PerformSearch(AId.ToString);
     end;
+end;
+
+procedure TPokedexView.HideHistoryPanel;
+begin
+  FIsHistoryVisible := False;
+  if Assigned(FHistoryPanel) then
+    FHistoryPanel.Visible := False;
 end;
 
 function CapitalizePokemonName(const AName: string): string;
@@ -518,6 +539,7 @@ begin
   end;
 
   Inc(FActiveSearchRequest);
+  Inc(FActiveMovePoolRequest);
   LSearchRequestId := FActiveSearchRequest;
   FSearchEdit.Enabled := False;
   btnNext.Visible := False;
@@ -525,8 +547,7 @@ begin
   SetLoading(True);
 
   FController.AddToHistory(AIdOrName);
-  if Assigned(FHistoryPanel) then
-    FHistoryPanel.Visible := False;
+  HideHistoryPanel;
 
   TThread.CreateAnonymousThread(
     procedure
@@ -534,8 +555,8 @@ begin
       LPokemon: TPokemon;
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
-      LTypeEffects: TArray<TTypeEffect>;
-      LAbilityName, LAbilityDesc, LErrorMsg, LSpriteUrl: string;
+      LTypeEffects, LOffensiveEffects: TArray<TTypeEffect>;
+      LAbilityName, LAbilityDesc, LAbilityNote, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
       LTypeNames, LTypeList: TArray<string>;
       I: Integer;
@@ -553,8 +574,10 @@ begin
       LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
+      SetLength(LOffensiveEffects, 0);
       LAbilityName := '';
       LAbilityDesc := '';
+      LAbilityNote := '';
       var
         LFlavorText: string := '';
       var
@@ -639,13 +662,16 @@ begin
           SetLength(LTypeNames, Length(LPokemon.Types));
           for I := 0 to High(LPokemon.Types) do
             LTypeNames[I] := LPokemon.Types[I].&Type.Name;
-          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames);
+          LOffensiveEffects := FController.GetOffensiveEffectiveness(LTypeNames);
         end;
         if Length(LPokemon.Abilities) > 0 then
         begin
           LAbilityName := LPokemon.Abilities[0].Ability.Name;
           LAbilityDesc := FController.GetAbilityDescription(LAbilityName, LPokeAPILang);
+          LAbilityNote := TPokemonController.GetDefensiveAbilityNote(LAbilityName);
         end;
+        if Length(LTypeNames) > 0 then
+          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames, LAbilityName);
         if Assigned(LPokemon.SpeciesData) then
           LFlavorText := LPokemon.SpeciesData.GetDescription(LPokeAPILang);
         // MyMemory only when PokeAPI has no native entry (e.g. pt-BR)
@@ -791,7 +817,9 @@ begin
               FStatsPanel.LoadDescription(LFlavorText);
             FEvolutionPanel.LoadChain(TPokemonController.FilterEvolutionChain
               (LChain, FCurrentId));
-            FStatsPanel.LoadEffects(LTypeEffects);
+            FStatsPanel.LoadEffects(LTypeEffects, LOffensiveEffects,
+              LAbilityNote);
+            FStatsPanel.ResetMovePool;
             FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
             FreeAndNil(LPokemon);
@@ -802,6 +830,7 @@ end;
 
 procedure TPokedexView.btnNextClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if (FIsFavMode or FIsFilteredMode) then
   begin
     if FFilteredIdx < High(FFilteredList) then
@@ -816,6 +845,7 @@ end;
 
 procedure TPokedexView.btnPrevClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if (FIsFavMode or FIsFilteredMode) then
   begin
     if FFilteredIdx > 0 then
@@ -830,6 +860,7 @@ end;
 
 procedure TPokedexView.FavBtnClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if FCurrentId > 0 then
   begin
     FController.ToggleFavorite(FCurrentId);
@@ -841,6 +872,7 @@ procedure TPokedexView.FavModeClick(Sender: TObject);
 var
   LFavs: TArray<string>;
 begin
+  HideHistoryPanel;
   if FIsFavMode then
   begin
     FIsFavMode := False;
@@ -897,6 +929,7 @@ end;
 
 procedure TPokedexView.ClearFilterClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   FIsFilteredMode := False;
   FIsFavMode := False;
   FClearFilterIcon.Visible := False;
@@ -905,21 +938,25 @@ end;
 
 procedure TPokedexView.CryIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PlayCry;
 end;
 
 procedure TPokedexView.RandomIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PerformSearch(TPokemonController.RandomPokemonId.ToString);
 end;
 
 procedure TPokedexView.SearchIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PerformSearch(FSearchEdit.Text);
 end;
 
 procedure TPokedexView.ShinyIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   FIsShiny := not FIsShiny;
   UpdateShinyIcon;
   ReloadSprite;
@@ -945,6 +982,8 @@ begin
     FHistoryHoverIdx := -1;
     FHistoryOverlay.Redraw;
   end;
+  if Length(LHistory) = 0 then
+    HideHistoryPanel;
 end;
 
 procedure TPokedexView.SearchEditExit(Sender: TObject);
@@ -956,9 +995,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
-          FIsHistoryVisible := False;
-          if Assigned(FHistoryPanel) then
-            FHistoryPanel.Visible := False;
+          HideHistoryPanel;
         end));
     end).Start;
 end;
@@ -1098,9 +1135,8 @@ begin
     begin
       FSearchEdit.Text := CapitalizePokemonName(LHistory[LIdx]);
       PerformSearch(LHistory[LIdx]);
-      FIsHistoryVisible := False;
-      FHistoryPanel.Visible := False;
     end;
+    HideHistoryPanel;
   end;
 end;
 
@@ -1175,11 +1211,11 @@ end;
 
 procedure TPokedexView.FormResize(Sender: TObject);
 begin
+  pnlTopContainer.SetBounds(0, 0, pnlImage.Width, SEARCH_H + (SEARCH_T * 2));
   CenterSearchBar;
   CenterSprite;
   if Assigned(FStatsPanel) and Assigned(pnlInfo) then
-    FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
-      pnlInfo.Height - pnlTopContainer.Height);
+    FStatsPanel.SetBounds(0, 0, pnlInfo.Width, pnlInfo.Height);
   if Assigned(FEvolutionPanel) then
     FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
       EVOLUTION_H);
@@ -1189,33 +1225,37 @@ procedure TPokedexView.CenterSprite;
 const
   ID_H = 18;
   NAME_H = 34;
+  FAV_H = 24;
+  NAME_BLOCK_H = NAME_H + FAV_H + 4;
   TYPE_H = 24;
   SHINY_H = 26;
   SHINY_W = 160;
 var
-  LAvailH, LTotalH, LGap, LY, LImgX: Integer;
+  LAvailH, LTotalH, LGap, LY, LImgX, LNameY, LFavY: Integer;
 begin
   LAvailH := pnlImage.Height - pnlTopContainer.Height;
-  LTotalH := ID_H + NAME_H + TYPE_H + SPRITE_SIZE + SHINY_H;
-  LGap := Max(6, (LAvailH - LTotalH) div 5);
+  LTotalH := ID_H + NAME_BLOCK_H + TYPE_H + SPRITE_SIZE + SHINY_H;
+  LGap := Max(10, (LAvailH - LTotalH) div 5);
   LY := pnlTopContainer.Height + LGap;
   LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
   if Assigned(FIdLabel) then
     FIdLabel.SetBounds(0, LY, pnlImage.Width, ID_H);
-  if Assigned(FFavBtn) then
-    FFavBtn.SetBounds(pnlImage.Width - 40, LY - 4, 24, 24);
   if Assigned(FDisplayNameLabel) then
     FDisplayNameLabel.SetBounds(0, LY + ID_H, pnlImage.Width, NAME_H);
-  LY := LY + ID_H + NAME_H + LGap;
+  LNameY := LY + ID_H;
+  LFavY := LNameY + NAME_H + 4;
+  if Assigned(FFavBtn) then
+    FFavBtn.SetBounds((pnlImage.Width - 24) div 2, LFavY, 24, 24);
+  btnPrev.SetBounds(20, LNameY + (NAME_H - btnPrev.Height) div 2, btnPrev.Width,
+    btnPrev.Height);
+  btnNext.SetBounds(pnlImage.Width - btnNext.Width - 20, LNameY +
+    (NAME_H - btnNext.Height) div 2, btnNext.Width, btnNext.Height);
+  LY := LY + ID_H + NAME_BLOCK_H + LGap;
   fpTypes.Top := LY;
   fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
   LY := LY + TYPE_H + LGap;
   if Assigned(FSpritePaintBox) then
     FSpritePaintBox.SetBounds(LImgX, LY, SPRITE_SIZE, SPRITE_SIZE);
-  btnPrev.SetBounds(LImgX - btnPrev.Width, LY + (SPRITE_SIZE - btnPrev.Height)
-    div 2, btnPrev.Width, btnPrev.Height);
-  btnNext.SetBounds(LImgX + SPRITE_SIZE, LY + (SPRITE_SIZE - btnNext.Height)
-    div 2, btnNext.Width, btnNext.Height);
   btnPrev.BringToFront;
   btnNext.BringToFront;
   LY := LY + SPRITE_SIZE + LGap;
@@ -1226,13 +1266,13 @@ end;
 procedure TPokedexView.CenterSearchBar;
 begin
   if Assigned(FSearchContainer) then
-    FSearchContainer.Left :=
-      (pnlTopContainer.Width - FSearchContainer.Width) div 2;
+    FSearchContainer.Left := (pnlImage.Width - FSearchContainer.Width) div 2;
 end;
 
 procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
 Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+  HideHistoryPanel;
   if Button = mbLeft then
     PlayCry;
 end;
@@ -1240,6 +1280,60 @@ end;
 procedure TPokedexView.UpdateShinyIcon;
 begin
   FShinyBtn.Redraw;
+end;
+
+procedure TPokedexView.StatsPanelMovesTabRequested(Sender: TObject);
+var
+  LMovePoolRequestId: Int64;
+  LPokemonId: Integer;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  LPokemonId := FCurrentId;
+  Inc(FActiveMovePoolRequest);
+  LMovePoolRequestId := FActiveMovePoolRequest;
+  FStatsPanel.SetMovesLoading(True);
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LSections: TArray<TMovePoolSection>;
+      LErrorMsg: string;
+    begin
+      SetLength(LSections, 0);
+      LErrorMsg := '';
+      try
+        LSections := FController.GetMovePool(LPokemonId.ToString);
+      except
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := E.Message;
+      end;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if (LMovePoolRequestId <> FActiveMovePoolRequest) or
+            (FStatsPanel.ActiveTab <> stMoves) then
+            Exit;
+
+          if not LErrorMsg.IsEmpty then
+          begin
+            FStatsPanel.SetMovesLoading(False);
+            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+            Exit;
+          end;
+
+          FStatsPanel.LoadMovePool(LSections);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelInteracted(Sender: TObject);
+begin
+  HideHistoryPanel;
 end;
 
 procedure TPokedexView.SetLoading(const AValue: Boolean);
@@ -1370,6 +1464,7 @@ end;
 
 procedure TPokedexView.TypeBadgeClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if Sender is TSkLabel then
     PerformSearch(TSkLabel(Sender).Caption.ToLower);
 end;

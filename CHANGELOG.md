@@ -3,6 +3,39 @@
 All notable changes to this project will be documented in this file.
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 
+## V5 Sprint Map / Mapa de Sprints V5
+
+- `Sprint 1` → `feat(5.0.0): Sprint 1 - Shiny Sprite Toggle`
+- `Sprint 2` → `feat(5.1.0): Sprint 2 - Quick Wins`
+- `Sprint 3` → `feat(5.3.0): Sprint 3 - UX Polish & Type Chart`
+- `Sprint 4` → `feat(5.4.0): Sprint 4 - Search History, Type Filter, Favorites & Translation`
+- `Sprint 5` → `feat(5.5.0): Sprint 5 - Search Loading & Stability Hardening`
+- `Sprint 6` → `feat(5.6.0): Sprint 6 - Offensive Chart & Lazy Movepool`
+
+## [5.6.0] - 2026-04-23
+
+### Added / Adicionado
+
+- **Offensive type chart**: The stats panel now shows what the current Pokemon hits for super-effective, resisted, or null damage based on its own typing.
+- **Type-colored movepool**: Moves in the learning panel now inherit their elemental colors, making TM, Egg and Level sections easier to scan.
+- **Tabbed learning panel**: The stats area gained a second tab dedicated to move learning, with internal subtabs for `LEVEL`, `TM`, and `EGG`.
+- **Lazy-loaded move learning**: Move data is fetched only when the learning tab is opened, reducing wasted work when browsing multiple Pokemon.
+- **Level-up list layout**: The `LEVEL` subtab now uses a list-style presentation with level markers and move chips, inspired by encyclopedia layouts.
+
+### Changed / Alterado
+
+- **Defensive chart with abilities**: The weakness panel now factors in `Levitate`, `Thick Fat`, and `Filter`, including a note when one of these abilities modifies the chart.
+- **Stats panel organization**: The right column was rebalanced into tabs so the original stats view remains readable without a scroll-heavy panel.
+- **Search/history interactions**: The search history dropdown now closes on more interactions and no longer lingers over the main content.
+- **Left-column layout polish**: Search, name, favorite icon, navigation arrows and sprite spacing were rebalanced to reduce clutter and better center the composition.
+- **Top overlay containment**: The top search container is now constrained to the left column, preventing it from overlapping the stats panel.
+
+### Technical / Técnico
+
+- **Controller split for movepool**: `TPokemonController` now exposes a dedicated `GetMovePool` flow instead of forcing move parsing during the main Pokemon load.
+- **Move metadata model**: `TMovePoolSection` now carries move types alongside move names so the UI can render contextual coloring.
+- **Stale request protection for moves**: Lazy movepool loading uses its own request token to avoid showing moves from a previously selected Pokemon.
+
 ## [5.5.0] - 2026-04-22
 
 ### Added / Adicionado
