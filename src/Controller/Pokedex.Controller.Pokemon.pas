@@ -17,20 +17,27 @@ type
   TPokemonController = class
   private
     FService: IPokemonService;
+    FHistory: TStringList;
+    FFavorites: TStringList;
     class var FTypeColors: TDictionary<string, TColor>;
     class var FSpeciesColors: TDictionary<string, TColor>;
     class procedure InitializeColorMaps;
+    procedure LoadHistory;
+    procedure SaveHistory;
+    procedure LoadFavorites;
+    procedure SaveFavorites;
     class constructor Create;
     class destructor Destroy;
 
   public
     constructor Create(const AService: IPokemonService);
+    destructor Destroy; override;
     function ExecuteGetPokemon(const AIdOrName: string): TPokemon;
     function DownloadFile(const AUrl: string): TMemoryStream;
     function GetEvolutionChain(const AUrl: string): TArray<TEvolutionNode>;
     function GetTypeEffectiveness(const ATypeNames: TArray<string>)
       : TArray<TTypeEffect>;
-    function GetAbilityDescription(const AName: string): string;
+    function GetAbilityDescription(const AName, ALang: string): string;
     class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
       const AActivePokemonId: Integer): TArray<TEvolutionNode>;
     class function FormatMetric(const AValue: Integer;
@@ -38,12 +45,24 @@ type
     class function GetCryUrl(const AId: Integer): string;
     class function GetColorByString(const AColorName: string): TColor;
     class function GetTypeColor(const ATypeName: string): TColor;
-    class function GetPreferredLanguage: string;
     class function GetSystemLanguage: string;
+    class function GetPreferredLanguage: string;
     class function Translate(const AText, AToLang: string): string;
     class function RandomPokemonId: Integer;
+    procedure AddToHistory(const ASearch: string);
+    function GetHistory: TArray<string>;
+    function GetPokemonByType(const ATypeName: string): TArray<string>;
+    class function IsValidType(const ATypeName: string): Boolean;
+    procedure ToggleFavorite(const AId: Integer);
+    function IsFavorite(const AId: Integer): Boolean;
+    function GetFavorites: TArray<string>;
 
   const
+    ALL_TYPES: array [0 .. 17] of string = ('normal', 'fire', 'water', 'electric',
+      'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
+      'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy');
+    HISTORY_FILE = 'recent_searches.txt';
+    FAVORITES_FILE = 'favorites.txt';
     BLACK_COLOR = $002C2C2C;
     POKEMON_MAX_ID = 1025;
     BLUE_COLOR = $00F09068;
@@ -63,7 +82,8 @@ uses
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
   System.NetEncoding,
-  System.Json;
+  System.Json,
+  System.IOUtils;
 
 class constructor TPokemonController.Create;
 begin
@@ -73,6 +93,119 @@ end;
 constructor TPokemonController.Create(const AService: IPokemonService);
 begin
   FService := AService;
+  FHistory := TStringList.Create;
+  FHistory.Duplicates := dupIgnore;
+  FHistory.Sorted := False;
+  FFavorites := TStringList.Create;
+  LoadHistory;
+  LoadFavorites;
+end;
+
+destructor TPokemonController.Destroy;
+begin
+  SaveHistory;
+  SaveFavorites;
+  FHistory.Free;
+  FFavorites.Free;
+  inherited;
+end;
+
+procedure TPokemonController.LoadFavorites;
+var
+  LPath: string;
+begin
+  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), FAVORITES_FILE);
+  if TFile.Exists(LPath) then
+    FFavorites.LoadFromFile(LPath);
+end;
+
+procedure TPokemonController.SaveFavorites;
+var
+  LPath: string;
+begin
+  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), FAVORITES_FILE);
+  try
+    FFavorites.SaveToFile(LPath);
+  except
+    // Silent fail
+  end;
+end;
+
+procedure TPokemonController.ToggleFavorite(const AId: Integer);
+var
+  LIdx: Integer;
+  LStrId: string;
+begin
+  LStrId := AId.ToString;
+  LIdx := FFavorites.IndexOf(LStrId);
+  if LIdx >= 0 then
+    FFavorites.Delete(LIdx)
+  else
+    FFavorites.Add(LStrId);
+  SaveFavorites;
+end;
+
+function TPokemonController.IsFavorite(const AId: Integer): Boolean;
+begin
+  Result := FFavorites.IndexOf(AId.ToString) >= 0;
+end;
+
+function TPokemonController.GetFavorites: TArray<string>;
+var
+  I: Integer;
+begin
+  SetLength(Result, FFavorites.Count);
+  for I := 0 to FFavorites.Count - 1 do
+    Result[I] := FFavorites[I];
+end;
+
+procedure TPokemonController.LoadHistory;
+var
+  LPath: string;
+begin
+  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), HISTORY_FILE);
+  if TFile.Exists(LPath) then
+    FHistory.LoadFromFile(LPath);
+end;
+
+procedure TPokemonController.SaveHistory;
+var
+  LPath: string;
+begin
+  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), HISTORY_FILE);
+  try
+    FHistory.SaveToFile(LPath);
+  except
+    // Silent fail if cannot save history
+  end;
+end;
+
+procedure TPokemonController.AddToHistory(const ASearch: string);
+var
+  LIdx: Integer;
+begin
+  if ASearch.Trim.IsEmpty then
+    Exit;
+
+  LIdx := FHistory.IndexOf(ASearch.ToLower);
+  if LIdx >= 0 then
+    FHistory.Delete(LIdx);
+
+  FHistory.Insert(0, ASearch.ToLower);
+
+  while FHistory.Count > 10 do
+    FHistory.Delete(FHistory.Count - 1);
+
+  SaveHistory;
+end;
+
+function TPokemonController.GetHistory: TArray<string>;
+var
+  I: Integer;
+begin
+  SetLength(Result, FHistory.Count);
+  for I := 0 to FHistory.Count - 1 do
+    Result[I] := FHistory[I];
 end;
 
 class destructor TPokemonController.Destroy;
@@ -530,18 +663,22 @@ begin
   end;
 end;
 
-function TPokemonController.GetAbilityDescription(const AName: string): string;
+function TPokemonController.GetAbilityDescription(const AName, ALang: string): string;
 var
   LJson: string;
   LRoot: TJSONValue;
   LObj: TJSONObject;
   LArr: TJSONArray;
   LEntry, LLangObj: TJSONValue;
-  LLang, LBackupEn: string;
+  LTargetLang, LBackupEn: string;
 begin
   Result := '';
   if AName.IsEmpty then
     Exit;
+  if ALang.IsEmpty then
+    LTargetLang := 'en'
+  else
+    LTargetLang := ALang;
   try
     LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/ability/' +
       LowerCase(AName));
@@ -557,7 +694,6 @@ begin
       LArr := TJSONArray(LObj.GetValue('flavor_text_entries'));
       if not Assigned(LArr) then
         Exit;
-      LLang := GetPreferredLanguage;
       LBackupEn := '';
       for LEntry in LArr do
         if LEntry is TJSONObject then
@@ -565,7 +701,7 @@ begin
           LLangObj := TJSONObject(LEntry).GetValue('language');
           if not(Assigned(LLangObj) and (LLangObj is TJSONObject)) then
             Continue;
-          if TJSONObject(LLangObj).GetValue<string>('name') = LLang then
+          if TJSONObject(LLangObj).GetValue<string>('name') = LTargetLang then
             Result := TJSONObject(LEntry).GetValue<string>('flavor_text')
           else if TJSONObject(LLangObj).GetValue<string>('name') = 'en' then
             LBackupEn := TJSONObject(LEntry).GetValue<string>('flavor_text');
@@ -589,6 +725,32 @@ begin
     Result := string(LLocaleName).Split(['-'])[0].ToLower
   else
     Result := 'en';
+end;
+
+class function TPokemonController.GetPreferredLanguage: string;
+var
+  LLocaleName: array [0 .. LOCALE_NAME_MAX_LENGTH - 1] of Char;
+  LLocale, LPrimary: string;
+begin
+  Result := 'en';
+  if GetUserDefaultLocaleName(LLocaleName, LOCALE_NAME_MAX_LENGTH) = 0 then
+    Exit;
+  LLocale := string(LLocaleName);
+  LPrimary := LLocale.Split(['-'])[0].ToLower;
+  if LPrimary = 'fr' then Result := 'fr'
+  else if LPrimary = 'de' then Result := 'de'
+  else if LPrimary = 'es' then Result := 'es'
+  else if LPrimary = 'it' then Result := 'it'
+  else if LPrimary = 'ja' then Result := 'ja'
+  else if LPrimary = 'ko' then Result := 'ko'
+  else if LPrimary = 'zh' then
+  begin
+    if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)
+      or LLocale.StartsWith('zh-HK', True) then
+      Result := 'zh-Hant'
+    else
+      Result := 'zh-Hans';
+  end;
 end;
 
 class function TPokemonController.Translate(const AText,
@@ -630,41 +792,82 @@ begin
   end;
 end;
 
-class function TPokemonController.GetPreferredLanguage: string;
-var
-  LLocaleName: array [0 .. LOCALE_NAME_MAX_LENGTH - 1] of Char;
-  LLocale, LPrimary: string;
-begin
-  Result := 'en';
-  if GetUserDefaultLocaleName(LLocaleName, LOCALE_NAME_MAX_LENGTH) = 0 then
-    Exit;
-  LLocale := string(LLocaleName);
-  LPrimary := LLocale.Split(['-'])[0].ToLower;
-  if LPrimary = 'fr' then
-    Result := 'fr'
-  else if LPrimary = 'de' then
-    Result := 'de'
-  else if LPrimary = 'es' then
-    Result := 'es'
-  else if LPrimary = 'it' then
-    Result := 'it'
-  else if LPrimary = 'ja' then
-    Result := 'ja'
-  else if LPrimary = 'ko' then
-    Result := 'ko'
-  else if LPrimary = 'zh' then
-  begin
-    if LLocale.StartsWith('zh-Hant', True) or LLocale.StartsWith('zh-TW', True)
-      or LLocale.StartsWith('zh-HK', True) then
-      Result := 'zh-Hant'
-    else
-      Result := 'zh-Hans';
-  end;
-end;
-
 class function TPokemonController.RandomPokemonId: Integer;
 begin
   Result := Random(POKEMON_MAX_ID) + 1;
+end;
+
+class function TPokemonController.IsValidType(const ATypeName: string): Boolean;
+var
+  LType: string;
+begin
+  Result := False;
+  for LType in ALL_TYPES do
+    if LType = ATypeName.ToLower.Trim then
+      Exit(True);
+end;
+
+function TPokemonController.GetPokemonByType(const ATypeName: string): TArray<string>;
+var
+  LJson: string;
+  LRoot: TJSONValue;
+  LObj: TJSONObject;
+  LArr: TJSONArray;
+  I, LPokId: Integer;
+  LPokeObj: TJSONObject;
+  LInner: TJSONValue;
+  LUrl: string;
+  LParts, LNames: TArray<string>;
+begin
+  SetLength(Result, 0);
+  if not IsValidType(ATypeName) then
+    Exit;
+  try
+    try
+      LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/type/' +
+        LowerCase(ATypeName.Trim));
+    except
+      Exit;
+    end;
+    if LJson.IsEmpty then
+      Exit;
+    LRoot := TJSONObject.ParseJSONValue(LJson);
+    if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
+    begin
+      if Assigned(LRoot) then
+        LRoot.Free;
+      Exit;
+    end;
+    LObj := TJSONObject(LRoot);
+    try
+      LArr := TJSONArray(LObj.GetValue('pokemon'));
+      if Assigned(LArr) then
+      begin
+        SetLength(LNames, 0);
+        for I := 0 to LArr.Count - 1 do
+        begin
+          if not(LArr.Items[I] is TJSONObject) then
+            Continue;
+          LInner := TJSONObject(LArr.Items[I]).GetValue('pokemon');
+          if not(Assigned(LInner) and (LInner is TJSONObject)) then
+            Continue;
+          LPokeObj := TJSONObject(LInner);
+          LUrl := LPokeObj.GetValue<string>('url', '');
+          LParts := LUrl.TrimRight(['/']).Split(['/']);
+          LPokId := StrToIntDef(LParts[High(LParts)], 0);
+          if (LPokId < 1) or (LPokId > POKEMON_MAX_ID) then
+            Continue;
+          SetLength(LNames, Length(LNames) + 1);
+          LNames[High(LNames)] := LPokeObj.GetValue<string>('name');
+        end;
+        Result := LNames;
+      end;
+    finally
+      LObj.Free;
+    end;
+  except
+    SetLength(Result, 0);
+  end;
 end;
 
 end.

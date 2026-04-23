@@ -65,6 +65,18 @@ type
     FIdLabel: TSkLabel;
     FSpritePaintBox: TSkPaintBox;
     FCurrentSprite: ISkImage;
+    FHistoryPanel: TPanel;
+    FHistoryOverlay: TSkPaintBox;
+    FIsHistoryVisible: Boolean;
+    FHistoryHoverIdx: Integer;
+    FFilteredList: TArray<string>;
+    FFilteredIdx: Integer;
+    FIsFilteredMode: Boolean;
+    FFilterTerm: string;
+    FClearFilterIcon: TSkSvg;
+    FFavBtn: TSkSvg;
+    FFavModeIcon: TSkSvg;
+    FIsFavMode: Boolean;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -76,6 +88,7 @@ type
     procedure PositionTypeContainer;
     procedure SetupLayout;
     procedure SetupSearchBar;
+    procedure SetupHistoryOverlay;
     procedure SetupStatsPanel;
     procedure SetupEvolutionPanel;
     procedure ShinyIconClick(Sender: TObject);
@@ -88,9 +101,22 @@ type
     procedure FormResize(Sender: TObject);
     procedure RandomIconClick(Sender: TObject);
     procedure SearchIconClick(Sender: TObject);
+    procedure TypeBadgeClick(Sender: TObject);
     procedure SearchEditKeyPress(Sender: TObject; var Key: Char);
+    procedure SearchEditEnter(Sender: TObject);
+    procedure SearchEditExit(Sender: TObject);
+    procedure ClearFilterClick(Sender: TObject);
+    procedure FavBtnClick(Sender: TObject);
+    procedure FavModeClick(Sender: TObject);
+    procedure UpdateFavIcons;
     procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
+    procedure DrawHistoryOverlay(ASender: TObject; const ACanvas: ISkCanvas;
+      const ADest: TRectF; const AOpacity: Single);
+    procedure HistoryOverlayMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure HistoryOverlayMouseMove(Sender: TObject; Shift: TShiftState;
+      X, Y: Integer);
     procedure DrawShinyBtn(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
     procedure DrawSprite(ASender: TObject; const ACanvas: ISkCanvas;
@@ -116,6 +142,7 @@ type
     SEARCH_H = 34;
     SEARCH_T = 7;
     SEARCH_W = 340;
+    HISTORY_ITEM_H = 30;
     ICON_SIZE = 20;
     ICON_PAD = 8;
     SPRITE_SIZE = 200;
@@ -153,6 +180,19 @@ begin
   Randomize;
 end;
 
+procedure TPokedexView.FormDestroy(Sender: TObject);
+begin
+  if FCurrentChannel <> 0 then
+  begin
+    BASS_ChannelStop(FCurrentChannel);
+    BASS_StreamFree(FCurrentChannel);
+  end;
+  FreeAndNil(FCurrentStream);
+  if Assigned(FController) then
+    FController.Free;
+  BASS_Free;
+end;
+
 procedure TPokedexView.SetupLayout;
 begin
   pnlTopContainer.Height := SEARCH_H + (SEARCH_T * 2);
@@ -179,7 +219,6 @@ begin
 
   skImgPokemon.Visible := False;
 
-  // Re-parent buttons out of skImgPokemon (was clipping btnNext at X=297 in a 200px control)
   btnNext.Parent := pnlImage;
   btnPrev.Parent := pnlImage;
 
@@ -200,6 +239,15 @@ begin
   FIdLabel.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
   FIdLabel.Visible := False;
 
+  FFavBtn := TSkSvg.Create(Self);
+  FFavBtn.Parent := pnlImage;
+  FFavBtn.SetBounds(0, 0, 24, 24);
+  FFavBtn.Cursor := crHandPoint;
+  FFavBtn.Hint := 'Favoritar Pok'#233'mon';
+  FFavBtn.ShowHint := True;
+  FFavBtn.OnClick := FavBtnClick;
+  FFavBtn.Visible := False;
+
   FShinyBtn := TSkPaintBox.Create(Self);
   FShinyBtn.Parent := pnlImage;
   FShinyBtn.Anchors := [akLeft, akTop];
@@ -208,6 +256,14 @@ begin
   FShinyBtn.OnDraw := DrawShinyBtn;
   FShinyBtn.BringToFront;
   FShinyBtn.Visible := False;
+
+  // Fix FlowPanel properties
+  fpTypes.AutoSize := False;
+  fpTypes.AutoWrap := False;
+  fpTypes.FlowStyle := TFlowStyle.fsLeftRightTopBottom;
+  fpTypes.BevelOuter := bvNone;
+  fpTypes.ParentBackground := True;
+  fpTypes.Height := 24; // Ensure height fits badges (22px)
 
   BorderIcons := BorderIcons - [biMaximize];
   CenterSprite;
@@ -231,8 +287,21 @@ begin
   FSearchBg.Align := alClient;
   FSearchBg.OnDraw := DrawSearchBg;
 
+  FClearFilterIcon := TSkSvg.Create(Self);
+  FClearFilterIcon.Parent := FSearchContainer;
+  FClearFilterIcon.SetBounds(ICON_PAD, (SEARCH_H - ICON_SIZE) div 2, ICON_SIZE,
+    ICON_SIZE);
+  FClearFilterIcon.Svg.Source :=
+    '<svg viewBox="0 0 24 24"><path fill="#FF5555" d="M19 6.41L17.59 5 12 10.59'
+    + ' 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+  FClearFilterIcon.Cursor := crHandPoint;
+  FClearFilterIcon.Hint := 'Limpar Filtro';
+  FClearFilterIcon.ShowHint := True;
+  FClearFilterIcon.Visible := False;
+  FClearFilterIcon.OnClick := ClearFilterClick;
+
   LEditLeft := SEARCH_H div 2;
-  LEditWidth := SEARCH_W - LEditLeft - (ICON_PAD + ICON_SIZE) * 3 - ICON_PAD;
+  LEditWidth := SEARCH_W - LEditLeft - (ICON_PAD + ICON_SIZE) * 4 - ICON_PAD;
 
   FSearchEdit := TEdit.Create(Self);
   FSearchEdit.Parent := FSearchContainer;
@@ -250,7 +319,10 @@ begin
 
   FSearchEdit.Anchors := [akLeft, akTop, akRight];
   FSearchEdit.OnKeyPress := SearchEditKeyPress;
+  FSearchEdit.OnEnter := SearchEditEnter;
+  FSearchEdit.OnExit := SearchEditExit;
   FSearchEdit.BringToFront;
+  FClearFilterIcon.BringToFront;
 
   FSearchIcon := TSkSvg.Create(Self);
   FSearchIcon.Parent := FSearchContainer;
@@ -296,17 +368,47 @@ begin
   FRandomIcon.ShowHint := True;
   FRandomIcon.OnClick := RandomIconClick;
   FRandomIcon.BringToFront;
+
+  FFavModeIcon := TSkSvg.Create(Self);
+  FFavModeIcon.Parent := FSearchContainer;
+  FFavModeIcon.SetBounds(SEARCH_W - (ICON_PAD + ICON_SIZE) * 4,
+    (SEARCH_H - ICON_SIZE) div 2, ICON_SIZE, ICON_SIZE);
+  FFavModeIcon.Anchors := [akTop, akRight];
+  FFavModeIcon.Cursor := crHandPoint;
+  FFavModeIcon.Hint := 'Ver Favoritos';
+  FFavModeIcon.ShowHint := True;
+  FFavModeIcon.Svg.Source :=
+    '<svg viewBox="0 0 24 24"><path fill="white" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 ' +
+    '4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38' +
+    '-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+  FFavModeIcon.OnClick := FavModeClick;
+  FFavModeIcon.BringToFront;
+
+  SetupHistoryOverlay;
 end;
 
 procedure TPokedexView.SetupStatsPanel;
 begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
-
   FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
     pnlInfo.Height - pnlTopContainer.Height);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
+end;
+
+procedure TPokedexView.SetupEvolutionPanel;
+begin
+  FEvolutionPanel := TEvolutionPanel.Create(Self);
+  FEvolutionPanel.Parent := Self;
+  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
+    EVOLUTION_H);
+  FEvolutionPanel.Anchors := [akLeft, akRight, akBottom];
+  FEvolutionPanel.FontFamily := FONT_FAMILY;
+  FEvolutionPanel.OnNodeClick := procedure(AId: Integer)
+    begin
+      PerformSearch(AId.ToString);
+    end;
 end;
 
 function CapitalizePokemonName(const AName: string): string;
@@ -318,7 +420,7 @@ begin
   LCapNext := True;
   for I := 1 to Length(Result) do
   begin
-    if LCapNext and CharInSet(Result[I], ['a'..'z']) then
+    if LCapNext and CharInSet(Result[I], ['a' .. 'z']) then
     begin
       Result[I] := UpCase(Result[I]);
       LCapNext := False;
@@ -326,284 +428,6 @@ begin
     else if CharInSet(Result[I], ['-', ' ']) then
       LCapNext := True;
   end;
-end;
-
-procedure TPokedexView.DrawShinyBtn(ASender: TObject; const ACanvas: ISkCanvas;
-  const ADest: TRectF; const AOpacity: Single);
-var
-  LPaint: ISkPaint;
-  LParaStyle: ISkParagraphStyle;
-  LTextStyle: ISkTextStyle;
-  LBuilder: ISkParagraphBuilder;
-  LP: ISkParagraph;
-  LText: string;
-  LTextColor: TAlphaColor;
-begin
-  LPaint := TSkPaint.Create;
-  LPaint.AntiAlias := True;
-  LPaint.Style := TSkPaintStyle.Fill;
-  LPaint.Color := $28FFFFFF;
-  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
-
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := 1;
-  LPaint.Color := $44FFFFFF;
-  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
-
-  if FIsShiny then
-  begin
-    LText := #$2605 + '  VER NORMAL';
-    LTextColor := $FFFFD700;
-  end
-  else
-  begin
-    LText := #$2605 + '  VER SHINY';
-    LTextColor := FThemeTextColor;
-  end;
-
-  LParaStyle := TSkParagraphStyle.Create;
-  LParaStyle.MaxLines := 1;
-  LParaStyle.TextAlign := TSkTextAlign.Center;
-
-  LTextStyle := TSkTextStyle.Create;
-  LTextStyle.FontFamilies := [FFontName, 'Segoe UI'];
-  LTextStyle.FontSize := 10;
-  LTextStyle.Color := LTextColor;
-  LTextStyle.FontStyle := TSkFontStyle.Bold;
-
-  LBuilder := TSkParagraphBuilder.Create(LParaStyle);
-  LBuilder.PushStyle(LTextStyle);
-  LBuilder.AddText(LText);
-  LBuilder.Pop;
-  LP := LBuilder.Build;
-  LP.Layout(ADest.Width);
-  LP.Paint(ACanvas, ADest.Left, ADest.Top + (ADest.Height - LP.Height) / 2);
-end;
-
-procedure TPokedexView.DrawSprite(ASender: TObject; const ACanvas: ISkCanvas;
-  const ADest: TRectF; const AOpacity: Single);
-var
-  LPaint: ISkPaint;
-  LCX, LCY, LR: Single;
-begin
-  LPaint := TSkPaint.Create;
-  LPaint.AntiAlias := True;
-  LCX := (ADest.Left + ADest.Right) / 2;
-  LCY := (ADest.Top  + ADest.Bottom) / 2;
-  LR  := Min(ADest.Width, ADest.Height) / 2 * 0.92;
-
-  LPaint.Style := TSkPaintStyle.Fill;
-  LPaint.Color := $0EFFFFFF;
-  ACanvas.DrawCircle(LCX, LCY, LR, LPaint);
-
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := 2;
-  LPaint.Color := $1AFFFFFF;
-  ACanvas.DrawCircle(LCX, LCY, LR, LPaint);
-  ACanvas.DrawLine(
-    TPointF.Create(LCX - LR, LCY),
-    TPointF.Create(LCX + LR, LCY), LPaint);
-
-  LPaint.Style := TSkPaintStyle.Fill;
-  LPaint.Color := $10FFFFFF;
-  ACanvas.DrawCircle(LCX, LCY, LR * 0.14, LPaint);
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := LR * 0.05;
-  LPaint.Color := $1AFFFFFF;
-  ACanvas.DrawCircle(LCX, LCY, LR * 0.14, LPaint);
-
-  if Assigned(FCurrentSprite) then
-  begin
-    LPaint.Style := TSkPaintStyle.Fill;
-    LPaint.Color := TAlphaColors.White;
-    ACanvas.DrawImageRect(FCurrentSprite, ADest,
-      TSkSamplingOptions.Create(TSkFilterMode.Linear, TSkMipmapMode.None),
-      LPaint);
-  end;
-end;
-
-procedure TPokedexView.DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
-  const ADest: TRectF; const AOpacity: Single);
-var
-  LPaint: ISkPaint;
-begin
-  LPaint := TSkPaint.Create;
-  LPaint.AntiAlias := True;
-  LPaint.Style := TSkPaintStyle.Fill;
-  LPaint.Color := DARK_PANEL_ALPHA;
-  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
-end;
-
-procedure TPokedexView.SearchEditKeyPress(Sender: TObject; var Key: Char);
-begin
-  if Key = #13 then
-  begin
-    Key := #0;
-    PerformSearch(FSearchEdit.Text);
-  end;
-end;
-
-procedure TPokedexView.CenterSprite;
-const
-  ID_H    = 18;
-  NAME_H  = 34;
-  TYPE_H  = 24;
-  SHINY_H = 26;
-  SHINY_W = 160;
-var
-  LAvailH, LTotalH, LGap, LY, LImgX: Integer;
-begin
-  LAvailH := pnlImage.Height - pnlTopContainer.Height;
-  LTotalH  := ID_H + NAME_H + TYPE_H + SPRITE_SIZE + SHINY_H;
-  LGap := Max(6, (LAvailH - LTotalH) div 5);
-
-  LY    := pnlTopContainer.Height + LGap;
-  LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
-
-  if Assigned(FIdLabel) then
-    FIdLabel.SetBounds(0, LY, pnlImage.Width, ID_H);
-
-  if Assigned(FDisplayNameLabel) then
-    FDisplayNameLabel.SetBounds(0, LY + ID_H, pnlImage.Width, NAME_H);
-
-  LY := LY + ID_H + NAME_H + LGap;
-
-  fpTypes.Top  := LY;
-  fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
-
-  LY := LY + TYPE_H + LGap;
-
-  if Assigned(FSpritePaintBox) then
-    FSpritePaintBox.SetBounds(LImgX, LY, SPRITE_SIZE, SPRITE_SIZE);
-
-  btnPrev.SetBounds(LImgX - btnPrev.Width,
-    LY + (SPRITE_SIZE - btnPrev.Height) div 2,
-    btnPrev.Width, btnPrev.Height);
-  btnNext.SetBounds(LImgX + SPRITE_SIZE,
-    LY + (SPRITE_SIZE - btnNext.Height) div 2,
-    btnNext.Width, btnNext.Height);
-  btnPrev.BringToFront;
-  btnNext.BringToFront;
-
-  LY := LY + SPRITE_SIZE + LGap;
-
-  if Assigned(FShinyBtn) then
-    FShinyBtn.SetBounds((pnlImage.Width - SHINY_W) div 2, LY, SHINY_W, SHINY_H);
-end;
-
-procedure TPokedexView.CenterSearchBar;
-begin
-  if Assigned(FSearchContainer) then
-  begin
-    FSearchContainer.Left :=
-      (pnlTopContainer.Width - FSearchContainer.Width) div 2;
-  end;
-end;
-
-procedure TPokedexView.FormResize(Sender: TObject);
-begin
-  CenterSearchBar;
-  CenterSprite;
-
-  if Assigned(FStatsPanel) and Assigned(pnlInfo) then
-    FStatsPanel.SetBounds(0, pnlTopContainer.Height,
-      pnlInfo.Width, pnlInfo.Height - pnlTopContainer.Height);
-
-  if Assigned(FEvolutionPanel) then
-    FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth, EVOLUTION_H);
-
-end;
-
-procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
-  Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-begin
-  if Button = mbLeft then
-    PlayCry;
-end;
-
-procedure TPokedexView.PlayCry;
-var
-  LCryId: Integer;
-  LGen: Integer;
-begin
-  if FCurrentId = 0 then
-    Exit;
-
-  if FCurrentChannel <> 0 then
-  begin
-    BASS_ChannelStop(FCurrentChannel);
-    BASS_StreamFree(FCurrentChannel);
-    FCurrentChannel := 0;
-  end;
-  FreeAndNil(FCurrentStream);
-
-  Inc(FCryGeneration);
-  LGen   := FCryGeneration;
-  LCryId := FCurrentId;
-
-  TThread.CreateAnonymousThread(
-    procedure
-    var
-      LStream: TMemoryStream;
-    begin
-      LStream := FController.DownloadFile(TPokemonController.GetCryUrl(LCryId));
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if LGen <> FCryGeneration then
-          begin
-            LStream.Free;
-            Exit;
-          end;
-
-          if not Assigned(LStream) then
-            Exit;
-
-          FCurrentStream := LStream;
-          FCurrentChannel := BASS_StreamCreateFile(True, FCurrentStream.Memory,
-            0, FCurrentStream.Size, 0);
-
-          if FCurrentChannel <> 0 then
-            BASS_ChannelPlay(FCurrentChannel, False);
-        end));
-    end).Start;
-end;
-
-procedure TPokedexView.SetupEvolutionPanel;
-begin
-  FEvolutionPanel := TEvolutionPanel.Create(Self);
-  FEvolutionPanel.Parent := Self;
-  FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth, EVOLUTION_H);
-  FEvolutionPanel.Anchors := [akLeft, akRight, akBottom];
-  FEvolutionPanel.FontFamily := FONT_FAMILY;
-  FEvolutionPanel.OnNodeClick := procedure(AId: Integer)
-    begin
-      PerformSearch(AId.ToString);
-    end;
-
-end;
-
-procedure TPokedexView.Initialize(const AService: IPokemonService);
-begin
-  FController := TPokemonController.Create(AService);
-  PostMessage(Handle, WM_USER + 1, 0, 0);
-end;
-
-procedure TPokedexView.WMAfterCreate(var Msg: TMessage);
-begin
-  PerformSearch('bulbasaur');
-end;
-
-procedure TPokedexView.FormDestroy(Sender: TObject);
-begin
-  if FCurrentChannel <> 0 then
-  begin
-    BASS_ChannelStop(FCurrentChannel);
-    BASS_StreamFree(FCurrentChannel);
-  end;
-  FreeAndNil(FCurrentStream);
-  FController.Free;
-  BASS_Free;
 end;
 
 procedure TPokedexView.ApplyTheme(const AColor: TColor);
@@ -635,6 +459,8 @@ begin
   pnlImage.Color := LEffectiveColor;
   pnlTopContainer.Color := LEffectiveColor;
   pnlInfo.Color := LEffectiveColor;
+  if Assigned(FHistoryPanel) then
+    FHistoryPanel.Color := LEffectiveColor;
 
   FSearchBg.Redraw;
 
@@ -650,7 +476,6 @@ begin
 
   FEvolutionPanel.ThemeColor := LAlphaColor;
 
-  // Boost bar color so it always contrasts against the dark stats panel background
   if LLum < 60 then
     FStatsPanel.BarColor := $FFFFD700
   else
@@ -665,185 +490,9 @@ begin
 
   FStatsPanel.Redraw;
   FEvolutionPanel.Redraw;
-
   if Assigned(FShinyBtn) and FShinyBtn.Visible then
     FShinyBtn.Redraw;
-end;
-
-procedure TPokedexView.SearchIconClick(Sender: TObject);
-begin
-  PerformSearch(FSearchEdit.Text);
-end;
-
-procedure TPokedexView.RandomIconClick(Sender: TObject);
-begin
-  PerformSearch(TPokemonController.RandomPokemonId.ToString);
-end;
-
-procedure TPokedexView.btnNextClick(Sender: TObject);
-begin
-  PerformSearch(IntToStr(FCurrentId + 1));
-end;
-
-procedure TPokedexView.btnPrevClick(Sender: TObject);
-begin
-  if FCurrentId > 1 then
-    PerformSearch(IntToStr(FCurrentId - 1));
-end;
-
-procedure TPokedexView.ClearTypeBadges;
-begin
-  fpTypes.Visible := True;
-  fpTypes.AutoSize := False;
-  while fpTypes.ControlCount > 0 do
-    fpTypes.Controls[0].Free;
-end;
-
-procedure TPokedexView.CreateTypeBadge(const ATypeName: string);
-var
-  LContainer: TPanel;
-  LBackground: TShape;
-  LBadge: TSkLabel;
-begin
-  LContainer := TPanel.Create(Self);
-  LContainer.Parent := fpTypes;
-  LContainer.Width := Max(48, Length(UpperCase(ATypeName)) * 7 + 22);
-  LContainer.Height := 22;
-  LContainer.BevelOuter := bvNone;
-  LContainer.ParentBackground := True;
-  LContainer.ShowCaption := False;
-  LContainer.Margins.Right := 6;
-
-  LBackground := TShape.Create(Self);
-  LBackground.Parent := LContainer;
-  LBackground.Align := alClient;
-  LBackground.Shape := stRoundRect;
-  LBackground.Brush.Color := TPokemonController.GetTypeColor(ATypeName);
-  LBackground.Pen.Color := clBlack;
-
-  LBadge := TSkLabel.Create(Self);
-  LBadge.Parent := LContainer;
-  LBadge.Align := alClient;
-  LBadge.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
-  LBadge.TextSettings.VertAlign := TSkTextVertAlign.Center;
-  LBadge.Caption := UpperCase(ATypeName);
-
-  if LBadge.Words.Count > 0 then
-  begin
-    LBadge.Words[0].Font.Size := 9;
-    LBadge.Words[0].Font.Weight := TSkFontComponent.TSkFontWeight.Bold;
-    LBadge.Words[0].FontColor := TAlphaColors.White;
-    LBadge.Words[0].Font.Families := FONT_FAMILY;
-  end;
-end;
-
-procedure TPokedexView.CryIconClick(Sender: TObject);
-begin
-  PlayCry;
-end;
-
-procedure TPokedexView.UpdateShinyIcon;
-begin
-  FShinyBtn.Redraw;
-end;
-
-procedure TPokedexView.ShinyIconClick(Sender: TObject);
-begin
-  FIsShiny := not FIsShiny;
-  UpdateShinyIcon;
-  ReloadSprite;
-end;
-
-procedure TPokedexView.ReloadSprite;
-var
-  LUrl: string;
-  LIsShiny: Boolean;
-begin
-  if FCurrentId = 0 then
-    Exit;
-
-  LIsShiny := FIsShiny;
-  if LIsShiny and not FCurrentShinySpriteUrl.IsEmpty then
-    LUrl := FCurrentShinySpriteUrl
-  else
-    LUrl := FCurrentSpriteUrl;
-
-  if LUrl.IsEmpty then
-    Exit;
-
-  TThread.CreateAnonymousThread(
-    procedure
-    var
-      LStream: TMemoryStream;
-      LThemeColor: TColor;
-    begin
-      LStream := FController.DownloadFile(LUrl);
-      if LIsShiny and Assigned(LStream) then
-      begin
-        LThemeColor := ExtractDominantColor(LStream);
-        LStream.Position := 0;
-      end
-      else
-        LThemeColor := FSpeciesColor;
-
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          ApplyTheme(LThemeColor);
-          if Assigned(LStream) then
-          try
-            var LBytes: TBytes;
-            SetLength(LBytes, LStream.Size);
-            LStream.Position := 0;
-            LStream.Read(LBytes[0], LStream.Size);
-            FCurrentSprite := TSkImage.MakeFromEncoded(LBytes);
-            FSpritePaintBox.Redraw;
-          finally
-            LStream.Free;
-          end;
-        end));
-    end).Start;
-end;
-
-function TPokedexView.ExtractDominantColor(AStream: TMemoryStream): TColor;
-var
-  LBytes: TBytes;
-  LImage: ISkImage;
-  LInfo: TSkImageInfo;
-  LPixels: TBytes;
-  I, R, G, B, Count: Integer;
-begin
-  Result := clBlack;
-  try
-    AStream.Position := 0;
-    SetLength(LBytes, AStream.Size);
-    AStream.Read(LBytes[0], Length(LBytes));
-    LImage := TSkImage.MakeFromEncoded(LBytes);
-    if not Assigned(LImage) or (LImage.Width = 0) then
-      Exit;
-    LInfo := TSkImageInfo.Create(LImage.Width, LImage.Height,
-      TSkColorType.RGBA8888, TSkAlphaType.Unpremul);
-    SetLength(LPixels, LImage.Width * LImage.Height * 4);
-    if not LImage.ReadPixels(LInfo, @LPixels[0], LImage.Width * 4) then
-      Exit;
-    R := 0; G := 0; B := 0; Count := 0;
-    I := 0;
-    while I <= Length(LPixels) - 4 do
-    begin
-      if LPixels[I + 3] > 128 then
-      begin
-        Inc(R, LPixels[I]);
-        Inc(G, LPixels[I + 1]);
-        Inc(B, LPixels[I + 2]);
-        Inc(Count);
-      end;
-      Inc(I, 4);
-    end;
-    if Count > 0 then
-      Result := RGB(R div Count, G div Count, B div Count);
-  except
-    Result := clBlack;
-  end;
+  UpdateFavIcons;
 end;
 
 procedure TPokedexView.PerformSearch(const AIdOrName: string);
@@ -859,6 +508,10 @@ begin
   btnNext.Visible := False;
   btnPrev.Visible := False;
 
+  FController.AddToHistory(AIdOrName);
+  if Assigned(FHistoryPanel) then
+    FHistoryPanel.Visible := False;
+
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -866,27 +519,76 @@ begin
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
       LTypeEffects: TArray<TTypeEffect>;
-      LAbilityName: string;
-      LAbilityDesc: string;
-      LErrorMsg: string;
-      LSpriteUrl: string;
+      LAbilityName, LAbilityDesc, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
-      LTypeNames: TArray<string>;
+      LTypeNames, LTypeList: TArray<string>;
       I: Integer;
+      LSearchTerm: string;
+      LIsNavigating: Boolean;
     begin
       LPokemon := nil;
       LStream := nil;
       LErrorMsg := '';
       LDominantColor := 0;
+      LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
       LAbilityName := '';
       LAbilityDesc := '';
-      var LFlavorText: string := '';
-      var LSystemLang: string := TPokemonController.GetSystemLanguage;
+      var
+        LFlavorText: string := '';
+      var
+        LPokeAPILang: string := TPokemonController.GetPreferredLanguage;
+      var
+        LSystemLang: string := TPokemonController.GetSystemLanguage;
+
+      LIsNavigating := False;
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if (FIsFavMode or FIsFilteredMode) and (FFilteredIdx >= 0) and
+            (FFilteredIdx < Length(FFilteredList)) then
+            LIsNavigating := (FFilteredList[FFilteredIdx] = LSearchTerm);
+        end));
 
       try
-        LPokemon := FController.ExecuteGetPokemon(AIdOrName);
+        if not LIsNavigating and not(StrToIntDef(LSearchTerm, 0) > 0) then
+        begin
+          LTypeList := FController.GetPokemonByType(LSearchTerm);
+          if Length(LTypeList) > 0 then
+          begin
+            TThread.Synchronize(nil, TThreadProcedure(
+              procedure
+              begin
+                FFilteredList := LTypeList;
+                FFilteredIdx := 0;
+                FIsFilteredMode := True;
+                FIsFavMode := False;
+                FFilterTerm := LSearchTerm;
+              end));
+            LSearchTerm := FFilteredList[0];
+          end
+          else
+          begin
+            TThread.Synchronize(nil, TThreadProcedure(
+              procedure
+              begin
+                FIsFilteredMode := False;
+                FIsFavMode := False;
+              end));
+          end;
+        end
+        else if not LIsNavigating then
+        begin
+          TThread.Synchronize(nil, TThreadProcedure(
+            procedure
+            begin
+              FIsFilteredMode := False;
+              FIsFavMode := False;
+            end));
+        end;
+
+        LPokemon := FController.ExecuteGetPokemon(LSearchTerm);
         if FIsShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
           LSpriteUrl := LPokemon.ShinySpriteUrl
         else
@@ -912,19 +614,19 @@ begin
         if Length(LPokemon.Abilities) > 0 then
         begin
           LAbilityName := LPokemon.Abilities[0].Ability.Name;
-          LAbilityDesc := FController.GetAbilityDescription(LAbilityName);
+          LAbilityDesc := FController.GetAbilityDescription(LAbilityName, LPokeAPILang);
         end;
-
         if Assigned(LPokemon.SpeciesData) then
-          LFlavorText := LPokemon.SpeciesData.GetDescription('en');
-
-        // Translate to Windows language
-        if LSystemLang <> 'en' then
+          LFlavorText := LPokemon.SpeciesData.GetDescription(LPokeAPILang);
+        // MyMemory only when PokeAPI has no native entry (e.g. pt-BR)
+        if (LPokeAPILang = 'en') and (LSystemLang <> 'en') then
         begin
           if not LAbilityDesc.IsEmpty then
-            LAbilityDesc := TPokemonController.Translate(LAbilityDesc, LSystemLang);
+            LAbilityDesc := TPokemonController.Translate(LAbilityDesc,
+              LSystemLang);
           if not LFlavorText.IsEmpty then
-            LFlavorText := TPokemonController.Translate(LFlavorText, LSystemLang);
+            LFlavorText := TPokemonController.Translate(LFlavorText,
+              LSystemLang);
         end;
       except
         on E: EPokemonNotFound do
@@ -933,15 +635,6 @@ begin
           LErrorMsg := MSG_NETWORK_ERROR;
         on E: Exception do
           LErrorMsg := E.Message;
-      end;
-      if not LErrorMsg.IsEmpty then
-      begin
-        FreeAndNil(LPokemon);
-        FreeAndNil(LStream);
-        SetLength(LChain, 0);
-        SetLength(LTypeEffects, 0);
-        LAbilityDesc := '';
-        LFlavorText := '';
       end;
 
       TThread.Synchronize(nil, TThreadProcedure(
@@ -956,20 +649,44 @@ begin
               MessageDlg(LErrorMsg, mtError, [mbOK], 0);
               Exit;
             end;
-
             FCurrentId := LPokemon.Id;
             FCurrentSpriteUrl := LPokemon.SpriteUrl;
             FCurrentShinySpriteUrl := LPokemon.ShinySpriteUrl;
-            FSearchEdit.Text := CapitalizePokemonName(LPokemon.Name);
+
+            FClearFilterIcon.Visible := FIsFilteredMode or FIsFavMode;
+
+            if FIsFilteredMode or FIsFavMode then
+              FSearchEdit.Left := ICON_PAD + ICON_SIZE + 5
+            else
+              FSearchEdit.Left := SEARCH_H div 2;
+            FSearchEdit.Width := SEARCH_W - FSearchEdit.Left -
+              (ICON_PAD + ICON_SIZE) * 4 - ICON_PAD;
+
+            if not(FIsFilteredMode or FIsFavMode) then
+              FSearchEdit.Text := CapitalizePokemonName(LPokemon.Name);
             btnNext.Visible := True;
             btnPrev.Visible := True;
+            if FIsFilteredMode or FIsFavMode then
+            begin
+              btnNext.Opacity := IfThen(FFilteredIdx <
+                High(FFilteredList), 255, 80);
+              btnPrev.Opacity := IfThen(FFilteredIdx > 0, 255, 80);
+            end
+            else
+            begin
+              btnNext.Opacity := 255;
+              btnPrev.Opacity := 255;
+            end;
+            btnNext.ShowHint := True;
+            btnPrev.ShowHint := True;
+
             FShinyBtn.Visible := True;
             UpdateShinyIcon;
 
             if Assigned(LPokemon.SpeciesData) then
             begin
-              FSpeciesColor := TPokemonController.GetColorByString(
-                LPokemon.SpeciesData.Color.Name);
+              FSpeciesColor := TPokemonController.GetColorByString
+                (LPokemon.SpeciesData.Color.Name);
               if FIsShiny and (LDominantColor <> 0) then
                 ApplyTheme(LDominantColor)
               else
@@ -986,41 +703,51 @@ begin
               FDisplayNameLabel.Words[0].FontColor := FThemeTextColor;
             end;
 
-            FIdLabel.Caption := Format('#%d', [LPokemon.Id]);
+            if FIsFilteredMode or FIsFavMode then
+            begin
+              if FIsFavMode then
+                FIdLabel.Caption := Format('#%d  '#$00B7'  FAV %d/%d',
+                  [LPokemon.Id, FFilteredIdx + 1, Length(FFilteredList)])
+              else
+                FIdLabel.Caption := Format('#%d  '#$00B7'  %s %d/%d',
+                  [LPokemon.Id, UpperCase(FFilterTerm),
+                  FFilteredIdx + 1, Length(FFilteredList)]);
+            end
+            else
+              FIdLabel.Caption := Format('#%d', [LPokemon.Id]);
             FIdLabel.Visible := True;
             if FIdLabel.Words.Count > 0 then
             begin
               FIdLabel.Words[0].Font.Families := FFontName;
-              FIdLabel.Words[0].Font.Size := 16;
+              FIdLabel.Words[0].Font.Size :=
+                IfThen(FIsFilteredMode or FIsFavMode, 11, 16);
               FIdLabel.Words[0].Font.Weight :=
-                TSkFontComponent.TSkFontWeight.SemiBold;
-              FIdLabel.Words[0].FontColor :=
-                (FThemeTextColor and $00FFFFFF) or $88000000;
+                TSkFontComponent.TSkFontWeight.Bold;
+              FIdLabel.Words[0].FontColor := (FThemeTextColor and $00FFFFFF) or
+                $AA000000;
             end;
-
+            UpdateFavIcons;
             FCurrentSprite := nil;
             if Assigned(LStream) then
-            try
-              var LSpriteBytes: TBytes;
-              SetLength(LSpriteBytes, LStream.Size);
-              LStream.Position := 0;
-              LStream.Read(LSpriteBytes[0], LStream.Size);
-              FCurrentSprite := TSkImage.MakeFromEncoded(LSpriteBytes);
-            finally
-              FreeAndNil(LStream);
-            end;
+              try
+                var
+                  LBytes: TBytes;
+                SetLength(LBytes, LStream.Size);
+                LStream.Position := 0;
+                LStream.Read(LBytes[0], LStream.Size);
+                FCurrentSprite := TSkImage.MakeFromEncoded(LBytes);
+              finally
+                FreeAndNil(LStream);
+              end;
             FSpritePaintBox.Redraw;
-
             UpdatePokemonStats(LPokemon);
             UpdatePokemonTypes(LPokemon);
-
             if LFlavorText.IsEmpty then
               FStatsPanel.LoadDescription(MSG_NOT_AVAILABLE_DESCRIPTION)
             else
               FStatsPanel.LoadDescription(LFlavorText);
-
-            FEvolutionPanel.LoadChain(
-              TPokemonController.FilterEvolutionChain(LChain, FCurrentId));
+            FEvolutionPanel.LoadChain(TPokemonController.FilterEvolutionChain
+              (LChain, FCurrentId));
             FStatsPanel.LoadEffects(LTypeEffects);
             FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
@@ -1030,20 +757,433 @@ begin
     end).Start;
 end;
 
-procedure TPokedexView.PositionTypeContainer;
-var
-  LTotalWidth, I: Integer;
+procedure TPokedexView.btnNextClick(Sender: TObject);
 begin
-  LTotalWidth := 0;
-  for I := 0 to fpTypes.ControlCount - 1 do
-    Inc(LTotalWidth, fpTypes.Controls[I].Width + 6);
-  if fpTypes.ControlCount > 0 then
-    Dec(LTotalWidth, 6);
-  if LTotalWidth < 1 then LTotalWidth := 1;
-  fpTypes.Width := LTotalWidth;
-  fpTypes.Height := 24;
-  fpTypes.Left := (pnlImage.Width - LTotalWidth) div 2;
-  fpTypes.BringToFront;
+  if (FIsFavMode or FIsFilteredMode) then
+  begin
+    if FFilteredIdx < High(FFilteredList) then
+    begin
+      Inc(FFilteredIdx);
+      PerformSearch(FFilteredList[FFilteredIdx]);
+    end;
+  end
+  else
+    PerformSearch(IntToStr(FCurrentId + 1));
+end;
+
+procedure TPokedexView.btnPrevClick(Sender: TObject);
+begin
+  if (FIsFavMode or FIsFilteredMode) then
+  begin
+    if FFilteredIdx > 0 then
+    begin
+      Dec(FFilteredIdx);
+      PerformSearch(FFilteredList[FFilteredIdx]);
+    end;
+  end
+  else if FCurrentId > 1 then
+    PerformSearch(IntToStr(FCurrentId - 1));
+end;
+
+procedure TPokedexView.FavBtnClick(Sender: TObject);
+begin
+  if FCurrentId > 0 then
+  begin
+    FController.ToggleFavorite(FCurrentId);
+    UpdateFavIcons;
+  end;
+end;
+
+procedure TPokedexView.FavModeClick(Sender: TObject);
+var
+  LFavs: TArray<string>;
+begin
+  if FIsFavMode then
+  begin
+    FIsFavMode := False;
+    PerformSearch(FCurrentId.ToString);
+  end
+  else
+  begin
+    LFavs := FController.GetFavorites;
+    if Length(LFavs) = 0 then
+    begin
+      MessageDlg('Voc'#234' ainda n'#227'o tem Pok'#233'mon favoritos.',
+        mtInformation, [mbOK], 0);
+      Exit;
+    end;
+    FIsFavMode := True;
+    FIsFilteredMode := False;
+    FFilteredList := LFavs;
+    FFilteredIdx := 0;
+    FSearchEdit.Clear;
+    PerformSearch(FFilteredList[0]);
+  end;
+  UpdateFavIcons;
+end;
+
+procedure TPokedexView.UpdateFavIcons;
+const
+  SVG_FAV_ON =
+    '<svg viewBox="0 0 24 24"><path fill="#FFD700" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
+  SVG_FAV_OFF =
+    '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+  SVG_FAV_MODE_ON =
+    '<svg viewBox="0 0 24 24"><path fill="#FFD700" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
+  SVG_FAV_MODE_OFF =
+    '<svg viewBox="0 0 24 24"><path fill="white" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+var
+  LOffColor: string;
+begin
+  if not Assigned(FController) then
+    Exit;
+  if FThemeTextColor = TAlphaColors.White then
+    LOffColor := 'white'
+  else
+    LOffColor := 'black';
+  if FController.IsFavorite(FCurrentId) then
+    FFavBtn.Svg.Source := SVG_FAV_ON
+  else
+    FFavBtn.Svg.Source := SVG_FAV_OFF.Replace('currentColor', LOffColor);
+  if FIsFavMode then
+    FFavModeIcon.Svg.Source := SVG_FAV_MODE_ON
+  else
+    FFavModeIcon.Svg.Source := SVG_FAV_MODE_OFF;
+  FFavBtn.Visible := FCurrentId > 0;
+end;
+
+procedure TPokedexView.ClearFilterClick(Sender: TObject);
+begin
+  FIsFilteredMode := False;
+  FIsFavMode := False;
+  FClearFilterIcon.Visible := False;
+  PerformSearch(FCurrentId.ToString);
+end;
+
+procedure TPokedexView.CryIconClick(Sender: TObject);
+begin
+  PlayCry;
+end;
+
+procedure TPokedexView.RandomIconClick(Sender: TObject);
+begin
+  PerformSearch(TPokemonController.RandomPokemonId.ToString);
+end;
+
+procedure TPokedexView.SearchIconClick(Sender: TObject);
+begin
+  PerformSearch(FSearchEdit.Text);
+end;
+
+procedure TPokedexView.ShinyIconClick(Sender: TObject);
+begin
+  FIsShiny := not FIsShiny;
+  UpdateShinyIcon;
+  ReloadSprite;
+end;
+
+procedure TPokedexView.SearchEditEnter(Sender: TObject);
+var
+  LHistory: TArray<string>;
+  LPos: TPoint;
+begin
+  LHistory := FController.GetHistory;
+  if Length(LHistory) > 0 then
+  begin
+    FHistoryPanel.Width := SEARCH_W;
+    FHistoryPanel.Height := (Length(LHistory) * HISTORY_ITEM_H) + 20;
+    LPos := FSearchContainer.ClientToParent
+      (TPoint.Create(0, FSearchContainer.Height), Self);
+    FHistoryPanel.Left := LPos.X;
+    FHistoryPanel.Top := LPos.Y + 2;
+    FHistoryPanel.Visible := True;
+    FHistoryPanel.BringToFront;
+    FIsHistoryVisible := True;
+    FHistoryHoverIdx := -1;
+    FHistoryOverlay.Redraw;
+  end;
+end;
+
+procedure TPokedexView.SearchEditExit(Sender: TObject);
+begin
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      Sleep(200);
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          FIsHistoryVisible := False;
+          if Assigned(FHistoryPanel) then
+            FHistoryPanel.Visible := False;
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
+const ADest: TRectF; const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+begin
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := DARK_PANEL_ALPHA;
+  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
+end;
+
+procedure TPokedexView.DrawSprite(ASender: TObject; const ACanvas: ISkCanvas;
+const ADest: TRectF; const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+  LCX, LCY, LR: Single;
+begin
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LCX := (ADest.Left + ADest.Right) / 2;
+  LCY := (ADest.Top + ADest.Bottom) / 2;
+  LR := Min(ADest.Width, ADest.Height) / 2 * 0.92;
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := $0EFFFFFF;
+  ACanvas.DrawCircle(LCX, LCY, LR, LPaint);
+  LPaint.Style := TSkPaintStyle.Stroke;
+  LPaint.StrokeWidth := 2;
+  LPaint.Color := $1AFFFFFF;
+  ACanvas.DrawCircle(LCX, LCY, LR, LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX - LR, LCY),
+    TPointF.Create(LCX + LR, LCY), LPaint);
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := $10FFFFFF;
+  ACanvas.DrawCircle(LCX, LCY, LR * 0.14, LPaint);
+  if Assigned(FCurrentSprite) then
+  begin
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Color := TAlphaColors.White;
+    ACanvas.DrawImageRect(FCurrentSprite, ADest,
+      TSkSamplingOptions.Create(TSkFilterMode.Linear,
+      TSkMipmapMode.None), LPaint);
+  end;
+end;
+
+procedure TPokedexView.DrawShinyBtn(ASender: TObject; const ACanvas: ISkCanvas;
+const ADest: TRectF; const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+  LParaStyle: ISkParagraphStyle;
+  LTextStyle: ISkTextStyle;
+  LBuilder: ISkParagraphBuilder;
+  LP: ISkParagraph;
+  LText: string;
+  LTextColor: TAlphaColor;
+begin
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := $28FFFFFF;
+  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
+  LPaint.Style := TSkPaintStyle.Stroke;
+  LPaint.StrokeWidth := 1;
+  LPaint.Color := $44FFFFFF;
+  ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
+  if FIsShiny then
+  begin
+    LText := #$2605 + ' VER NORMAL';
+    LTextColor := $FFFFD700;
+  end
+  else
+  begin
+    LText := #$2605 + ' VER SHINY';
+    LTextColor := FThemeTextColor;
+  end;
+  LParaStyle := TSkParagraphStyle.Create;
+  LParaStyle.MaxLines := 1;
+  LParaStyle.TextAlign := TSkTextAlign.Center;
+  LTextStyle := TSkTextStyle.Create;
+  LTextStyle.FontFamilies := [FFontName, 'Segoe UI'];
+  LTextStyle.FontSize := 10;
+  LTextStyle.Color := LTextColor;
+  LTextStyle.FontStyle := TSkFontStyle.Bold;
+  LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+  LBuilder.PushStyle(LTextStyle);
+  LBuilder.AddText(LText);
+  LBuilder.Pop;
+  LP := LBuilder.Build;
+  LP.Layout(ADest.Width);
+  LP.Paint(ACanvas, ADest.Left, ADest.Top + (ADest.Height - LP.Height) / 2);
+end;
+
+procedure TPokedexView.HistoryOverlayMouseDown(Sender: TObject;
+Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  LHistory: TArray<string>;
+  LIdx: Integer;
+begin
+  if Button = mbLeft then
+  begin
+    LIdx := Trunc((Y - 10) / HISTORY_ITEM_H);
+    LHistory := FController.GetHistory;
+    if (LIdx >= 0) and (LIdx < Length(LHistory)) then
+    begin
+      FSearchEdit.Text := CapitalizePokemonName(LHistory[LIdx]);
+      PerformSearch(LHistory[LIdx]);
+      FIsHistoryVisible := False;
+      FHistoryPanel.Visible := False;
+    end;
+  end;
+end;
+
+procedure TPokedexView.HistoryOverlayMouseMove(Sender: TObject;
+Shift: TShiftState; X, Y: Integer);
+var
+  LOldIdx: Integer;
+begin
+  LOldIdx := FHistoryHoverIdx;
+  FHistoryHoverIdx := Trunc((Y - 10) / HISTORY_ITEM_H);
+  if (Y < 10) or (Y > FHistoryPanel.Height - 10) then
+    FHistoryHoverIdx := -1;
+  if FHistoryHoverIdx <> LOldIdx then
+    FHistoryOverlay.Redraw;
+end;
+
+procedure TPokedexView.DrawHistoryOverlay(ASender: TObject;
+const ACanvas: ISkCanvas; const ADest: TRectF; const AOpacity: Single);
+var
+  LHistory: TArray<string>;
+  I: Integer;
+  LPaint: ISkPaint;
+  LParaStyle: ISkParagraphStyle;
+  LTextStyle: ISkTextStyle;
+  LBuilder: ISkParagraphBuilder;
+  LP: ISkParagraph;
+  LY, LRadius: Single;
+begin
+  LHistory := FController.GetHistory;
+  if Length(LHistory) = 0 then
+    Exit;
+  LRadius := 17;
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := $F82A2A2A;
+  ACanvas.DrawRoundRect(ADest, LRadius, LRadius, LPaint);
+  LPaint.Style := TSkPaintStyle.Stroke;
+  LPaint.StrokeWidth := 1.5;
+  LPaint.Color := $33FFFFFF;
+  ACanvas.DrawRoundRect(ADest, LRadius, LRadius, LPaint);
+  LY := 10;
+  for I := 0 to High(LHistory) do
+  begin
+    if I = FHistoryHoverIdx then
+    begin
+      LPaint.Style := TSkPaintStyle.Fill;
+      LPaint.Color := $22FFFFFF;
+      ACanvas.DrawRoundRect(TRectF.Create(ADest.Left + 10, LY, ADest.Right - 10,
+        LY + HISTORY_ITEM_H), 10, 10, LPaint);
+    end;
+    LParaStyle := TSkParagraphStyle.Create;
+    LParaStyle.MaxLines := 1;
+    LParaStyle.TextAlign := TSkTextAlign.Left;
+    LTextStyle := TSkTextStyle.Create;
+    LTextStyle.FontFamilies := [FFontName, 'Segoe UI'];
+    LTextStyle.FontSize := 11;
+    LTextStyle.Color := TAlphaColors.White;
+    LTextStyle.FontStyle := TSkFontStyle.Bold;
+    if I = FHistoryHoverIdx then
+      LTextStyle.Color := $FFFFD700;
+    LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+    LBuilder.PushStyle(LTextStyle);
+    LBuilder.AddText('     ' + CapitalizePokemonName(LHistory[I]));
+    LBuilder.Pop;
+    LP := LBuilder.Build;
+    LP.Layout(ADest.Width - 30);
+    LP.Paint(ACanvas, ADest.Left + 10, LY + (HISTORY_ITEM_H - LP.Height) / 2);
+    LY := LY + HISTORY_ITEM_H;
+  end;
+end;
+
+procedure TPokedexView.FormResize(Sender: TObject);
+begin
+  CenterSearchBar;
+  CenterSprite;
+  if Assigned(FStatsPanel) and Assigned(pnlInfo) then
+    FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
+      pnlInfo.Height - pnlTopContainer.Height);
+  if Assigned(FEvolutionPanel) then
+    FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
+      EVOLUTION_H);
+end;
+
+procedure TPokedexView.CenterSprite;
+const
+  ID_H = 18;
+  NAME_H = 34;
+  TYPE_H = 24;
+  SHINY_H = 26;
+  SHINY_W = 160;
+var
+  LAvailH, LTotalH, LGap, LY, LImgX: Integer;
+begin
+  LAvailH := pnlImage.Height - pnlTopContainer.Height;
+  LTotalH := ID_H + NAME_H + TYPE_H + SPRITE_SIZE + SHINY_H;
+  LGap := Max(6, (LAvailH - LTotalH) div 5);
+  LY := pnlTopContainer.Height + LGap;
+  LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
+  if Assigned(FIdLabel) then
+    FIdLabel.SetBounds(0, LY, pnlImage.Width, ID_H);
+  if Assigned(FFavBtn) then
+    FFavBtn.SetBounds(pnlImage.Width - 40, LY - 4, 24, 24);
+  if Assigned(FDisplayNameLabel) then
+    FDisplayNameLabel.SetBounds(0, LY + ID_H, pnlImage.Width, NAME_H);
+  LY := LY + ID_H + NAME_H + LGap;
+  fpTypes.Top := LY;
+  fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
+  LY := LY + TYPE_H + LGap;
+  if Assigned(FSpritePaintBox) then
+    FSpritePaintBox.SetBounds(LImgX, LY, SPRITE_SIZE, SPRITE_SIZE);
+  btnPrev.SetBounds(LImgX - btnPrev.Width, LY + (SPRITE_SIZE - btnPrev.Height)
+    div 2, btnPrev.Width, btnPrev.Height);
+  btnNext.SetBounds(LImgX + SPRITE_SIZE, LY + (SPRITE_SIZE - btnNext.Height)
+    div 2, btnNext.Width, btnNext.Height);
+  btnPrev.BringToFront;
+  btnNext.BringToFront;
+  LY := LY + SPRITE_SIZE + LGap;
+  if Assigned(FShinyBtn) then
+    FShinyBtn.SetBounds((pnlImage.Width - SHINY_W) div 2, LY, SHINY_W, SHINY_H);
+end;
+
+procedure TPokedexView.CenterSearchBar;
+begin
+  if Assigned(FSearchContainer) then
+    FSearchContainer.Left :=
+      (pnlTopContainer.Width - FSearchContainer.Width) div 2;
+end;
+
+procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
+Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  if Button = mbLeft then
+    PlayCry;
+end;
+
+procedure TPokedexView.UpdateShinyIcon;
+begin
+  FShinyBtn.Redraw;
+end;
+
+procedure TPokedexView.Initialize(const AService: IPokemonService);
+begin
+  FController := TPokemonController.Create(AService);
+  PostMessage(Handle, WM_USER + 1, 0, 0);
+end;
+
+procedure TPokedexView.WMAfterCreate(var Msg: TMessage);
+begin
+  PerformSearch('bulbasaur');
+end;
+
+procedure TPokedexView.ReloadSprite;
+begin
+  PerformSearch(FCurrentId.ToString);
 end;
 
 procedure TPokedexView.UpdatePokemonStats(APokemon: TPokemon);
@@ -1056,33 +1196,215 @@ begin
     LAbility := UpperCase(APokemon.Abilities[0].Ability.Name)
   else
     LAbility := '';
-
   FStatsPanel.LoadInfo(TPokemonController.FormatMetric(APokemon.Weight, 'kg'),
     TPokemonController.FormatMetric(APokemon.Height, 'm'), LAbility);
-
   SetLength(LStats, Length(APokemon.Stats));
   for I := 0 to High(APokemon.Stats) do
   begin
     LStats[I].Name := APokemon.Stats[I].Stat.Name;
     LStats[I].Value := APokemon.Stats[I].BaseStat;
   end;
-
   FStatsPanel.LoadStats(LStats);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);
 var
-  I: Integer;
+  I, LNextLeft: Integer;
+  LBadge: TControl;
 begin
   ClearTypeBadges;
-
   if Length(APokemon.Types) > 0 then
   begin
-    for I := 0 to Length(APokemon.Types) - 1 do
-      CreateTypeBadge(APokemon.Types[I].&Type.Name);
+    fpTypes.AutoWrap := False;
+    fpTypes.FlowStyle := TFlowStyle.fsLeftRightTopBottom;
+    fpTypes.Width := pnlImage.Width;
+    LNextLeft := 0;
 
+    for I := 0 to Length(APokemon.Types) - 1 do
+    begin
+      CreateTypeBadge(APokemon.Types[I].&Type.Name);
+      LBadge := fpTypes.Controls[fpTypes.ControlCount - 1];
+      LBadge.Left := LNextLeft;
+      LBadge.Top := 0;
+      LNextLeft := LNextLeft + LBadge.Width + 6;
+    end;
     PositionTypeContainer;
   end;
+end;
+
+procedure TPokedexView.ClearTypeBadges;
+begin
+  while fpTypes.ControlCount > 0 do
+    fpTypes.Controls[0].Free;
+end;
+
+procedure TPokedexView.CreateTypeBadge(const ATypeName: string);
+var
+  LContainer: TPanel;
+  LBackground: TShape;
+  LBadge: TSkLabel;
+begin
+  LContainer := TPanel.Create(Self);
+  LContainer.Parent := fpTypes;
+  LContainer.Width := Max(48, Length(UpperCase(ATypeName)) * 7 + 22);
+  LContainer.Height := 22;
+  LContainer.BevelOuter := bvNone;
+  LContainer.ParentBackground := True;
+  LContainer.Margins.Right := 6;
+  LBackground := TShape.Create(Self);
+  LBackground.Parent := LContainer;
+  LBackground.Align := alClient;
+  LBackground.Shape := stRoundRect;
+  LBackground.Brush.Color := TPokemonController.GetTypeColor(ATypeName);
+  LBackground.Pen.Color := clBlack;
+  LBackground.Enabled := False;
+  LBadge := TSkLabel.Create(Self);
+  LBadge.Parent := LContainer;
+  LBadge.Align := alClient;
+  LBadge.TextSettings.HorzAlign := TSkTextHorzAlign.Center;
+  LBadge.TextSettings.VertAlign := TSkTextVertAlign.Center;
+  LBadge.Caption := UpperCase(ATypeName);
+  LBadge.Cursor := crHandPoint;
+  LBadge.OnClick := TypeBadgeClick;
+  if LBadge.Words.Count > 0 then
+  begin
+    LBadge.Words[0].Font.Size := 9;
+    LBadge.Words[0].Font.Weight := TSkFontComponent.TSkFontWeight.Bold;
+    LBadge.Words[0].FontColor := TAlphaColors.White;
+    LBadge.Words[0].Font.Families := FONT_FAMILY;
+  end;
+end;
+
+procedure TPokedexView.TypeBadgeClick(Sender: TObject);
+begin
+  if Sender is TSkLabel then
+    PerformSearch(TSkLabel(Sender).Caption.ToLower);
+end;
+
+procedure TPokedexView.PositionTypeContainer;
+var
+  LTotalWidth, I: Integer;
+begin
+  LTotalWidth := 0;
+  for I := 0 to fpTypes.ControlCount - 1 do
+  begin
+    Inc(LTotalWidth, fpTypes.Controls[I].Width + 6);
+    fpTypes.Controls[I].Top := 0; // Force all to top line
+  end;
+  if fpTypes.ControlCount > 0 then
+    Dec(LTotalWidth, 6);
+  fpTypes.Width := Max(1, LTotalWidth);
+  fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
+end;
+
+procedure TPokedexView.SearchEditKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+  begin
+    Key := #0;
+    PerformSearch(FSearchEdit.Text);
+  end;
+end;
+
+procedure TPokedexView.PlayCry;
+var
+  LCryId, LGen: Integer;
+begin
+  if FCurrentId = 0 then
+    Exit;
+  if FCurrentChannel <> 0 then
+  begin
+    BASS_ChannelStop(FCurrentChannel);
+    BASS_StreamFree(FCurrentChannel);
+    FCurrentChannel := 0;
+  end;
+  FreeAndNil(FCurrentStream);
+  Inc(FCryGeneration);
+  LGen := FCryGeneration;
+  LCryId := FCurrentId;
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LStream: TMemoryStream;
+    begin
+      LStream := FController.DownloadFile(TPokemonController.GetCryUrl(LCryId));
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if LGen <> FCryGeneration then
+          begin
+            LStream.Free;
+            Exit;
+          end;
+          if not Assigned(LStream) then
+            Exit;
+          FCurrentStream := LStream;
+          FCurrentChannel := BASS_StreamCreateFile(True, FCurrentStream.Memory,
+            0, FCurrentStream.Size, 0);
+          if FCurrentChannel <> 0 then
+            BASS_ChannelPlay(FCurrentChannel, False);
+        end));
+    end).Start;
+end;
+
+function TPokedexView.ExtractDominantColor(AStream: TMemoryStream): TColor;
+var
+  LBytes: TBytes;
+  LImage: ISkImage;
+  LInfo: TSkImageInfo;
+  LPixels: TBytes;
+  I, R, G, B, Count: Integer;
+begin
+  Result := clBlack;
+  try
+    AStream.Position := 0;
+    SetLength(LBytes, AStream.Size);
+    AStream.Read(LBytes[0], Length(LBytes));
+    LImage := TSkImage.MakeFromEncoded(LBytes);
+    if not Assigned(LImage) or (LImage.Width = 0) then
+      Exit;
+    LInfo := TSkImageInfo.Create(LImage.Width, LImage.Height,
+      TSkColorType.RGBA8888, TSkAlphaType.Unpremul);
+    SetLength(LPixels, LImage.Width * LImage.Height * 4);
+    if not LImage.ReadPixels(LInfo, @LPixels[0], LImage.Width * 4) then
+      Exit;
+    R := 0;
+    G := 0;
+    B := 0;
+    Count := 0;
+    I := 0;
+    while I <= Length(LPixels) - 4 do
+    begin
+      if LPixels[I + 3] > 128 then
+      begin
+        Inc(R, LPixels[I]);
+        Inc(G, LPixels[I + 1]);
+        Inc(B, LPixels[I + 2]);
+        Inc(Count);
+      end;
+      Inc(I, 4);
+    end;
+    if Count > 0 then
+      Result := RGB(R div Count, G div Count, B div Count);
+  except
+    Result := clBlack;
+  end;
+end;
+
+procedure TPokedexView.SetupHistoryOverlay;
+begin
+  FHistoryPanel := TPanel.Create(Self);
+  FHistoryPanel.Parent := Self;
+  FHistoryPanel.BevelOuter := bvNone;
+  FHistoryPanel.ParentBackground := False;
+  FHistoryPanel.Color := DARK_PANEL_VCL;
+  FHistoryPanel.Visible := False;
+  FHistoryOverlay := TSkPaintBox.Create(Self);
+  FHistoryOverlay.Parent := FHistoryPanel;
+  FHistoryOverlay.Align := alClient;
+  FHistoryOverlay.OnDraw := DrawHistoryOverlay;
+  FHistoryOverlay.OnMouseDown := HistoryOverlayMouseDown;
+  FHistoryOverlay.OnMouseMove := HistoryOverlayMouseMove;
 end;
 
 end.

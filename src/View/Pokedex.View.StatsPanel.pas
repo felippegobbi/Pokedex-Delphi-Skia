@@ -55,7 +55,7 @@ type
 implementation
 
 const
-  MULT_LABELS: array[0..4] of string  = ('4x', '2x', '1/2', '1/4', '0x');
+  MULT_LABELS: array[0..4] of string  = ('4X', '2X', '1/2', '1/4', '0X');
   MULT_VALUES: array[0..4] of Single  = (4.0,  2.0,  0.5,  0.25,  0.0);
 
 const
@@ -137,14 +137,8 @@ begin
   LTextStyle.FontSize := AFontSize;
   LTextStyle.Color    := AColor;
 
-  if ABold and AItalic then
-    LTextStyle.FontStyle := TSkFontStyle.BoldItalic
-  else if ABold then
-    LTextStyle.FontStyle := TSkFontStyle.Bold
-  else if AItalic then
-    LTextStyle.FontStyle := TSkFontStyle.Italic
-  else
-    LTextStyle.FontStyle := TSkFontStyle.Normal;
+  // STRICT BOLD, NO ITALIC AS REQUESTED
+  LTextStyle.FontStyle := TSkFontStyle.Bold;
 
   LBuilder := TSkParagraphBuilder.Create(LParaStyle);
   LBuilder.PushStyle(LTextStyle);
@@ -227,14 +221,14 @@ begin
     end;
 
     LP := MakeParagraph(LStat.Value.ToString, 9.5, $FFFFFFFF,
-      False, False, TSkTextAlign.Right, 1);
+      True, False, TSkTextAlign.Right, 1);
     LP.Layout(VAL_W);
     LP.Paint(ACanvas, LPanelRect.Right - PANEL_PAD - VAL_W,
       LRowTop + (ROW_H - LP.Height) / 2);
   end;
 
   LRowTop := LY + LCount * ROW_H + 2;
-  LP := MakeParagraph('TOTAL', 8.5, $55FFFFFF, False, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph('TOTAL', 9.0, $55FFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LABEL_W);
   LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LRowTop);
   LP := MakeParagraph(FBST.ToString, 9.5, FBarColor, True, False, TSkTextAlign.Right, 1);
@@ -251,29 +245,29 @@ begin
   LPaint.Style := TSkPaintStyle.Fill;
   LY := LY + 12;
 
-  LP := MakeParagraph('PESO', 8.5, $66FFFFFF, False, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph('PESO', 9.0, $88FFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph('ALTURA', 8.5, $66FFFFFF, False, False, TSkTextAlign.Center, 1);
+  LP := MakeParagraph('ALTURA', 9.0, $88FFFFFF, True, False, TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph('HABILIDADE', 8.5, $66FFFFFF, False, False, TSkTextAlign.Right, 1);
+  LP := MakeParagraph('HABILIDADE', 9.0, $88FFFFFF, True, False, TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
   LY := LY + 16;
 
-  LP := MakeParagraph(FWeight, 10, $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph(FWeight, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph(FHeight, 10, $FFFFFFFF, True, False, TSkTextAlign.Center, 1);
+  LP := MakeParagraph(FHeight, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph(FAbility, 10, $FFFFFFFF, True, False, TSkTextAlign.Right, 1);
+  LP := MakeParagraph(FAbility, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
@@ -281,7 +275,7 @@ begin
 
   if FAbilityDescription <> '' then
   begin
-    LP := MakeParagraph(FAbilityDescription, 9, $99FFFFFF,
+    LP := MakeParagraph(FAbilityDescription, 9.5, $99FFFFFF,
       True, False, TSkTextAlign.Center, 3);
     LP.Layout(LPanelRect.Width - 2 * PANEL_PAD);
     LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LY);
@@ -303,7 +297,7 @@ begin
   if FDescription <> '' then
   begin
     LP := MakeParagraph(FDescription, 10.5, $AAFFFFFF,
-      False, True, TSkTextAlign.Center, 5);
+      True, False, TSkTextAlign.Center, 5);
     LP.Layout(LPanelRect.Width - 2 * PANEL_PAD);
     LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LY);
     LY := LY + LP.Height;
@@ -322,8 +316,8 @@ begin
     LPaint.Style := TSkPaintStyle.Fill;
     LY := LY + 10;
 
-    LP := MakeParagraph('EFETIVIDADE DEFENSIVA', 8, $55FFFFFF,
-      False, False, TSkTextAlign.Center, 1);
+    LP := MakeParagraph('EFETIVIDADE DEFENSIVA', 9, $88FFFFFF,
+      True, False, TSkTextAlign.Center, 1);
     LP.Layout(LPanelRect.Width);
     LP.Paint(ACanvas, LPanelRect.Left, LY);
     LY := LY + LP.Height + 6;
