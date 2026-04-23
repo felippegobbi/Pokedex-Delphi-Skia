@@ -67,6 +67,7 @@ const
   LABEL_W   = 52;
   VAL_W     = 32;
   DARK_BG: TAlphaColor = $FF2A2A2A;
+  STATS_FONT_SIZE = 9.5;
 
 constructor TStatsPanel.Create(AOwner: TComponent);
 begin
@@ -202,7 +203,7 @@ begin
     LRowTop := LY + I * ROW_H;
     LBarTop := LRowTop + (ROW_H - BAR_H) / 2;
 
-    LP := MakeParagraph(AbbreviateStat(LStat.Name), 9.5, $88FFFFFF,
+    LP := MakeParagraph(AbbreviateStat(LStat.Name), STATS_FONT_SIZE, $88FFFFFF,
       True, False, TSkTextAlign.Left, 1);
     LP.Layout(LABEL_W);
     LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD,
@@ -220,7 +221,7 @@ begin
       ACanvas.DrawRoundRect(LBarFill, BAR_R, BAR_R, LPaint);
     end;
 
-    LP := MakeParagraph(LStat.Value.ToString, 9.5, $FFFFFFFF,
+    LP := MakeParagraph(LStat.Value.ToString, STATS_FONT_SIZE, $FFFFFFFF,
       True, False, TSkTextAlign.Right, 1);
     LP.Layout(VAL_W);
     LP.Paint(ACanvas, LPanelRect.Right - PANEL_PAD - VAL_W,
@@ -228,10 +229,10 @@ begin
   end;
 
   LRowTop := LY + LCount * ROW_H + 2;
-  LP := MakeParagraph('TOTAL', 9.0, $55FFFFFF, True, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph('TOTAL', STATS_FONT_SIZE, $55FFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LABEL_W);
   LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LRowTop);
-  LP := MakeParagraph(FBST.ToString, 9.5, FBarColor, True, False, TSkTextAlign.Right, 1);
+  LP := MakeParagraph(FBST.ToString, STATS_FONT_SIZE, FBarColor, True, False, TSkTextAlign.Right, 1);
   LP.Layout(VAL_W + 4);
   LP.Paint(ACanvas, LPanelRect.Right - PANEL_PAD - VAL_W - 4, LRowTop);
 
@@ -245,29 +246,29 @@ begin
   LPaint.Style := TSkPaintStyle.Fill;
   LY := LY + 12;
 
-  LP := MakeParagraph('PESO', 9.0, $88FFFFFF, True, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph('PESO', STATS_FONT_SIZE, $88FFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph('ALTURA', 9.0, $88FFFFFF, True, False, TSkTextAlign.Center, 1);
+  LP := MakeParagraph('ALTURA', STATS_FONT_SIZE, $88FFFFFF, True, False, TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph('HABILIDADE', 9.0, $88FFFFFF, True, False, TSkTextAlign.Right, 1);
+  LP := MakeParagraph('HABILIDADE', STATS_FONT_SIZE, $88FFFFFF, True, False, TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
   LY := LY + 16;
 
-  LP := MakeParagraph(FWeight, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
+  LP := MakeParagraph(FWeight, STATS_FONT_SIZE, $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph(FHeight, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Center, 1);
+  LP := MakeParagraph(FHeight, STATS_FONT_SIZE, $FFFFFFFF, True, False, TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
-  LP := MakeParagraph(FAbility, 10.5, $FFFFFFFF, True, False, TSkTextAlign.Right, 1);
+  LP := MakeParagraph(FAbility, STATS_FONT_SIZE, $FFFFFFFF, True, False, TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, LPanelRect.Left + 20, LY);
 
@@ -275,7 +276,7 @@ begin
 
   if FAbilityDescription <> '' then
   begin
-    LP := MakeParagraph(FAbilityDescription, 9.5, $99FFFFFF,
+    LP := MakeParagraph(FAbilityDescription, STATS_FONT_SIZE, $99FFFFFF,
       True, False, TSkTextAlign.Center, 3);
     LP.Layout(LPanelRect.Width - 2 * PANEL_PAD);
     LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LY);
@@ -296,7 +297,7 @@ begin
 
   if FDescription <> '' then
   begin
-    LP := MakeParagraph(FDescription, 10.5, $AAFFFFFF,
+    LP := MakeParagraph(FDescription, STATS_FONT_SIZE, $AAFFFFFF,
       True, False, TSkTextAlign.Center, 5);
     LP.Layout(LPanelRect.Width - 2 * PANEL_PAD);
     LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD, LY);
@@ -316,7 +317,7 @@ begin
     LPaint.Style := TSkPaintStyle.Fill;
     LY := LY + 10;
 
-    LP := MakeParagraph('EFETIVIDADE DEFENSIVA', 9, $88FFFFFF,
+    LP := MakeParagraph('EFETIVIDADE DEFENSIVA', STATS_FONT_SIZE, $88FFFFFF,
       True, False, TSkTextAlign.Center, 1);
     LP.Layout(LPanelRect.Width);
     LP.Paint(ACanvas, LPanelRect.Left, LY);
@@ -334,7 +335,7 @@ begin
       if not LHasGroup then
         Continue;
 
-      LP := MakeParagraph(MULT_LABELS[I], 10, FBarColor,
+      LP := MakeParagraph(MULT_LABELS[I], STATS_FONT_SIZE, FBarColor,
         True, False, TSkTextAlign.Left, 1);
       LP.Layout(34);
       LP.Paint(ACanvas, LPanelRect.Left + PANEL_PAD,
@@ -347,7 +348,7 @@ begin
         if Abs(LEffect.Multiplier - MULT_VALUES[I]) > 0.01 then
           Continue;
 
-        LP := MakeParagraph(UpperCase(LEffect.TypeName), 7.5,
+        LP := MakeParagraph(UpperCase(LEffect.TypeName), STATS_FONT_SIZE,
           $FFFFFFFF, True, False, TSkTextAlign.Left, 1);
         LP.Layout(300);
         LBadgeW := LP.LongestLine + 10 + 2;

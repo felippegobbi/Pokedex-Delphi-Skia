@@ -85,6 +85,9 @@ uses
   System.Json,
   System.IOUtils;
 
+const
+  HTTP_TIMEOUT_MS = 10000;
+
 class constructor TPokemonController.Create;
 begin
   InitializeColorMaps;
@@ -221,6 +224,8 @@ begin
   Result := nil;
   LHttp := TNetHTTPClient.Create(nil);
   try
+    LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
+    LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
     try
       Result := TMemoryStream.Create;
       LHttp.Get(AUrl, Result);
@@ -767,6 +772,8 @@ begin
     Exit;
   LHttp := TNetHTTPClient.Create(nil);
   try
+    LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
+    LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
     try
       LUrl := 'https://api.mymemory.translated.net/get?q=' +
         TNetEncoding.URL.Encode(AText.Trim) + '&langpair=en|' + AToLang;

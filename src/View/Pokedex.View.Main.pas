@@ -77,6 +77,10 @@ type
     FFavBtn: TSkSvg;
     FFavModeIcon: TSkSvg;
     FIsFavMode: Boolean;
+    FIsLoading: Boolean;
+    FLoadingTick: Integer;
+    FLoadingTimer: TTimer;
+    FActiveSearchRequest: Int64;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -109,6 +113,8 @@ type
     procedure FavBtnClick(Sender: TObject);
     procedure FavModeClick(Sender: TObject);
     procedure UpdateFavIcons;
+    procedure SetLoading(const AValue: Boolean);
+    procedure LoadingTimerTick(Sender: TObject);
     procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
     procedure DrawHistoryOverlay(ASender: TObject; const ACanvas: ISkCanvas;
@@ -136,6 +142,7 @@ type
       'Erro de conex'#227'o. Verifique sua internet e tente novamente.';
     DARK_PANEL_ALPHA: TAlphaColor = $FF2A2A2A;
     DARK_PANEL_VCL: TColor = $002A2A2A;
+    POKEBALL_RED: TAlphaColor = $FFE14B3B;
     EVOLUTION_H = 160;
     TYPE_CHART_H = 140;
     SPRITE_TOP = 128;
@@ -176,6 +183,10 @@ begin
   SetupSearchBar;
   SetupStatsPanel;
   SetupEvolutionPanel;
+  FLoadingTimer := TTimer.Create(Self);
+  FLoadingTimer.Enabled := False;
+  FLoadingTimer.Interval := 90;
+  FLoadingTimer.OnTimer := LoadingTimerTick;
   BASS_Init(-1, 44100, 0, Handle, nil);
   Randomize;
 end;
@@ -496,6 +507,8 @@ begin
 end;
 
 procedure TPokedexView.PerformSearch(const AIdOrName: string);
+var
+  LSearchRequestId: Int64;
 begin
   if Trim(AIdOrName).IsEmpty then
   begin
@@ -504,9 +517,12 @@ begin
     Exit;
   end;
 
+  Inc(FActiveSearchRequest);
+  LSearchRequestId := FActiveSearchRequest;
   FSearchEdit.Enabled := False;
   btnNext.Visible := False;
   btnPrev.Visible := False;
+  SetLoading(True);
 
   FController.AddToHistory(AIdOrName);
   if Assigned(FHistoryPanel) then
@@ -525,11 +541,15 @@ begin
       I: Integer;
       LSearchTerm: string;
       LIsNavigating: Boolean;
+      LUseShiny: Boolean;
+      LShowShinyUnavailable: Boolean;
     begin
       LPokemon := nil;
       LStream := nil;
       LErrorMsg := '';
       LDominantColor := 0;
+      LUseShiny := False;
+      LShowShinyUnavailable := False;
       LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
@@ -549,6 +569,7 @@ begin
           if (FIsFavMode or FIsFilteredMode) and (FFilteredIdx >= 0) and
             (FFilteredIdx < Length(FFilteredList)) then
             LIsNavigating := (FFilteredList[FFilteredIdx] = LSearchTerm);
+          LUseShiny := FIsShiny;
         end));
 
       try
@@ -589,12 +610,21 @@ begin
         end;
 
         LPokemon := FController.ExecuteGetPokemon(LSearchTerm);
-        if FIsShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
+        if LUseShiny and not LPokemon.ShinySpriteUrl.IsEmpty then
           LSpriteUrl := LPokemon.ShinySpriteUrl
         else
           LSpriteUrl := LPokemon.SpriteUrl;
         LStream := FController.DownloadFile(LSpriteUrl);
-        if FIsShiny and Assigned(LStream) then
+        if LUseShiny and (LPokemon.ShinySpriteUrl.IsEmpty or not Assigned(LStream))
+        then
+        begin
+          LShowShinyUnavailable := True;
+          FreeAndNil(LStream);
+          LSpriteUrl := LPokemon.SpriteUrl;
+          LStream := FController.DownloadFile(LSpriteUrl);
+          LUseShiny := False;
+        end;
+        if LUseShiny and Assigned(LStream) then
         begin
           LDominantColor := ExtractDominantColor(LStream);
           LStream.Position := 0;
@@ -640,6 +670,14 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if LSearchRequestId <> FActiveSearchRequest then
+          begin
+            FreeAndNil(LStream);
+            FreeAndNil(LPokemon);
+            Exit;
+          end;
+
+          SetLoading(False);
           FSearchEdit.Enabled := True;
           try
             if not Assigned(LPokemon) then
@@ -652,6 +690,8 @@ begin
             FCurrentId := LPokemon.Id;
             FCurrentSpriteUrl := LPokemon.SpriteUrl;
             FCurrentShinySpriteUrl := LPokemon.ShinySpriteUrl;
+            if FIsShiny <> LUseShiny then
+              FIsShiny := LUseShiny;
 
             FClearFilterIcon.Visible := FIsFilteredMode or FIsFavMode;
 
@@ -682,6 +722,9 @@ begin
 
             FShinyBtn.Visible := True;
             UpdateShinyIcon;
+            if LShowShinyUnavailable then
+              MessageDlg('Sprite shiny n'#227'o dispon'#237'vel para este Pok'#233'mon.',
+                mtInformation, [mbOK], 0);
 
             if Assigned(LPokemon.SpeciesData) then
             begin
@@ -924,12 +967,30 @@ procedure TPokedexView.DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
 const ADest: TRectF; const AOpacity: Single);
 var
   LPaint: ISkPaint;
+  LSpinnerRect: TRectF;
+  LSpinnerSize: Single;
+  LSpinnerLeft: Single;
 begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
   LPaint.Style := TSkPaintStyle.Fill;
   LPaint.Color := DARK_PANEL_ALPHA;
   ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
+  if FIsLoading then
+  begin
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 2.5;
+    LPaint.Color := $33FFFFFF;
+    LSpinnerSize := ICON_SIZE;
+    LSpinnerLeft := ADest.Right - (ICON_PAD + ICON_SIZE) * 2 +
+      ((ICON_SIZE - LSpinnerSize) / 2) + 1;
+    LSpinnerRect := TRectF.Create(LSpinnerLeft,
+      ADest.CenterPoint.Y - (LSpinnerSize / 2), LSpinnerLeft + LSpinnerSize,
+      ADest.CenterPoint.Y + (LSpinnerSize / 2));
+    ACanvas.DrawArc(LSpinnerRect, 0, 360, False, LPaint);
+    LPaint.Color := POKEBALL_RED;
+    ACanvas.DrawArc(LSpinnerRect, FLoadingTick * 28, 120, False, LPaint);
+  end;
 end;
 
 procedure TPokedexView.DrawSprite(ASender: TObject; const ACanvas: ISkCanvas;
@@ -937,6 +998,7 @@ const ADest: TRectF; const AOpacity: Single);
 var
   LPaint: ISkPaint;
   LCX, LCY, LR: Single;
+  LSpinnerRect: TRectF;
 begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
@@ -962,6 +1024,16 @@ begin
     ACanvas.DrawImageRect(FCurrentSprite, ADest,
       TSkSamplingOptions.Create(TSkFilterMode.Linear,
       TSkMipmapMode.None), LPaint);
+  end;
+  if FIsLoading then
+  begin
+    LSpinnerRect := TRectF.Create(LCX - 24, LCY - 24, LCX + 24, LCY + 24);
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 4;
+    LPaint.Color := $22FFFFFF;
+    ACanvas.DrawArc(LSpinnerRect, 0, 360, False, LPaint);
+    LPaint.Color := POKEBALL_RED;
+    ACanvas.DrawArc(LSpinnerRect, FLoadingTick * 28, 110, False, LPaint);
   end;
 end;
 
@@ -1168,6 +1240,27 @@ end;
 procedure TPokedexView.UpdateShinyIcon;
 begin
   FShinyBtn.Redraw;
+end;
+
+procedure TPokedexView.SetLoading(const AValue: Boolean);
+begin
+  if FIsLoading = AValue then
+    Exit;
+  FIsLoading := AValue;
+  if Assigned(FSearchIcon) then
+    FSearchIcon.Visible := not AValue;
+  FLoadingTimer.Enabled := AValue;
+  if not AValue then
+    FLoadingTick := 0;
+  FSearchBg.Redraw;
+  FSpritePaintBox.Redraw;
+end;
+
+procedure TPokedexView.LoadingTimerTick(Sender: TObject);
+begin
+  Inc(FLoadingTick);
+  FSearchBg.Redraw;
+  FSpritePaintBox.Redraw;
 end;
 
 procedure TPokedexView.Initialize(const AService: IPokemonService);
