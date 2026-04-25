@@ -81,6 +81,13 @@ type
     FLoadingTick: Integer;
     FLoadingTimer: TTimer;
     FActiveSearchRequest: Int64;
+    FActiveMovePoolRequest: Int64;
+    FActiveEncounterRequest: Int64;
+    FActiveFlavorRequest: Int64;
+    FCurrentFlavorTexts: TArray<string>;
+    FCurrentFlavorTranslated: TArray<string>;
+    FFlavorNeedsTranslation: Boolean;
+    FFlavorTargetLang: string;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -93,6 +100,7 @@ type
     procedure SetupLayout;
     procedure SetupSearchBar;
     procedure SetupHistoryOverlay;
+    procedure HideHistoryPanel;
     procedure SetupStatsPanel;
     procedure SetupEvolutionPanel;
     procedure ShinyIconClick(Sender: TObject);
@@ -113,6 +121,10 @@ type
     procedure FavBtnClick(Sender: TObject);
     procedure FavModeClick(Sender: TObject);
     procedure UpdateFavIcons;
+    procedure StatsPanelMovesTabRequested(Sender: TObject);
+    procedure StatsPanelLocationsTabRequested(Sender: TObject);
+    procedure StatsPanelFlavorOptionSelected(Sender: TObject; AIndex: Integer);
+    procedure StatsPanelInteracted(Sender: TObject);
     procedure SetLoading(const AValue: Boolean);
     procedure LoadingTimerTick(Sender: TObject);
     procedure DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
@@ -206,6 +218,15 @@ end;
 
 procedure TPokedexView.SetupLayout;
 begin
+  if Width < 980 then
+    Width := 980;
+  if Height < 820 then
+    Height := 820;
+  Constraints.MinWidth := 980;
+  Constraints.MinHeight := 820;
+  pnlTopContainer.Align := alNone;
+  pnlTopContainer.SetBounds(0, 0, 368, SEARCH_H + (SEARCH_T * 2));
+  pnlTopContainer.Anchors := [akLeft, akTop];
   pnlTopContainer.Height := SEARCH_H + (SEARCH_T * 2);
   pnlTopContainer.BringToFront;
 
@@ -402,10 +423,13 @@ procedure TPokedexView.SetupStatsPanel;
 begin
   FStatsPanel := TStatsPanel.Create(Self);
   FStatsPanel.Parent := pnlInfo;
-  FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
-    pnlInfo.Height - pnlTopContainer.Height);
+  FStatsPanel.SetBounds(0, 0, pnlInfo.Width, pnlInfo.Height);
   FStatsPanel.Anchors := [akLeft, akTop, akRight, akBottom];
   FStatsPanel.FontFamily := FONT_FAMILY;
+  FStatsPanel.OnInteract := StatsPanelInteracted;
+  FStatsPanel.OnMovesTabRequested := StatsPanelMovesTabRequested;
+  FStatsPanel.OnLocationsTabRequested := StatsPanelLocationsTabRequested;
+  FStatsPanel.OnFlavorOptionSelected := StatsPanelFlavorOptionSelected;
 end;
 
 procedure TPokedexView.SetupEvolutionPanel;
@@ -420,6 +444,13 @@ begin
     begin
       PerformSearch(AId.ToString);
     end;
+end;
+
+procedure TPokedexView.HideHistoryPanel;
+begin
+  FIsHistoryVisible := False;
+  if Assigned(FHistoryPanel) then
+    FHistoryPanel.Visible := False;
 end;
 
 function CapitalizePokemonName(const AName: string): string;
@@ -518,6 +549,9 @@ begin
   end;
 
   Inc(FActiveSearchRequest);
+  Inc(FActiveMovePoolRequest);
+  Inc(FActiveEncounterRequest);
+  Inc(FActiveFlavorRequest);
   LSearchRequestId := FActiveSearchRequest;
   FSearchEdit.Enabled := False;
   btnNext.Visible := False;
@@ -525,8 +559,7 @@ begin
   SetLoading(True);
 
   FController.AddToHistory(AIdOrName);
-  if Assigned(FHistoryPanel) then
-    FHistoryPanel.Visible := False;
+  HideHistoryPanel;
 
   TThread.CreateAnonymousThread(
     procedure
@@ -535,14 +568,16 @@ begin
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
       LTypeEffects: TArray<TTypeEffect>;
-      LAbilityName, LAbilityDesc, LErrorMsg, LSpriteUrl: string;
+      LAbilityName, LAbilityDesc, LAbilityNote, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
-      LTypeNames, LTypeList: TArray<string>;
+      LTypeNames, LTypeList, LFlavorLabels, LFlavorTexts: TArray<string>;
       I: Integer;
       LSearchTerm: string;
       LIsNavigating: Boolean;
       LUseShiny: Boolean;
       LShowShinyUnavailable: Boolean;
+      LFlavorSelectedIdx: Integer;
+      LFlavorNeedsTranslation: Boolean;
     begin
       LPokemon := nil;
       LStream := nil;
@@ -550,13 +585,20 @@ begin
       LDominantColor := 0;
       LUseShiny := False;
       LShowShinyUnavailable := False;
+      LFlavorSelectedIdx := -1;
+      LFlavorNeedsTranslation := False;
       LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
+      SetLength(LFlavorLabels, 0);
+      SetLength(LFlavorTexts, 0);
       LAbilityName := '';
       LAbilityDesc := '';
+      LAbilityNote := '';
       var
         LFlavorText: string := '';
+      var
+        LFlavorEntryLang: string := '';
       var
         LPokeAPILang: string := TPokemonController.GetPreferredLanguage;
       var
@@ -639,24 +681,60 @@ begin
           SetLength(LTypeNames, Length(LPokemon.Types));
           for I := 0 to High(LPokemon.Types) do
             LTypeNames[I] := LPokemon.Types[I].&Type.Name;
-          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames);
         end;
         if Length(LPokemon.Abilities) > 0 then
         begin
           LAbilityName := LPokemon.Abilities[0].Ability.Name;
           LAbilityDesc := FController.GetAbilityDescription(LAbilityName, LPokeAPILang);
+          LAbilityNote := TPokemonController.GetDefensiveAbilityNote(LAbilityName);
         end;
+        if Length(LTypeNames) > 0 then
+          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames, LAbilityName);
         if Assigned(LPokemon.SpeciesData) then
+        begin
           LFlavorText := LPokemon.SpeciesData.GetDescription(LPokeAPILang);
-        // MyMemory only when PokeAPI has no native entry (e.g. pt-BR)
+          if not LFlavorText.IsEmpty then
+            LFlavorEntryLang := LPokeAPILang
+          else
+          begin
+            LFlavorText := LPokemon.SpeciesData.GetDescription('en');
+            if not LFlavorText.IsEmpty then
+              LFlavorEntryLang := 'en';
+          end;
+        end;
+
         if (LPokeAPILang = 'en') and (LSystemLang <> 'en') then
         begin
           if not LAbilityDesc.IsEmpty then
             LAbilityDesc := TPokemonController.Translate(LAbilityDesc,
               LSystemLang);
-          if not LFlavorText.IsEmpty then
-            LFlavorText := TPokemonController.Translate(LFlavorText,
-              LSystemLang);
+        end;
+
+        if Assigned(LPokemon.SpeciesData) then
+          for I := 0 to High(LPokemon.SpeciesData.FlavorEntries) do
+            if Assigned(LPokemon.SpeciesData.FlavorEntries[I].Language) and
+              SameText(LPokemon.SpeciesData.FlavorEntries[I].Language.Name,
+              LFlavorEntryLang) and
+              Assigned(LPokemon.SpeciesData.FlavorEntries[I].Version) then
+            begin
+              SetLength(LFlavorLabels, Length(LFlavorLabels) + 1);
+              SetLength(LFlavorTexts, Length(LFlavorTexts) + 1);
+              LFlavorLabels[High(LFlavorLabels)] :=
+                TPokemonController.CapitalizeDisplayName(
+                LPokemon.SpeciesData.FlavorEntries[I].Version.Name);
+              LFlavorTexts[High(LFlavorTexts)] :=
+                LPokemon.SpeciesData.FlavorEntries[I].Text.Replace(#10, ' ')
+                .Replace(#12, ' ').Replace(#13, ' ');
+            end;
+
+        if Length(LFlavorTexts) > 0 then
+        begin
+          LFlavorSelectedIdx := High(LFlavorTexts);
+          LFlavorText := LFlavorTexts[LFlavorSelectedIdx];
+          LFlavorNeedsTranslation := (LSystemLang <> 'en') and
+            SameText(LFlavorEntryLang, 'en');
+          if LFlavorNeedsTranslation then
+            LFlavorText := TPokemonController.Translate(LFlavorText, LSystemLang);
         end;
       except
         on E: EPokemonNotFound do
@@ -785,13 +863,40 @@ begin
             FSpritePaintBox.Redraw;
             UpdatePokemonStats(LPokemon);
             UpdatePokemonTypes(LPokemon);
-            if LFlavorText.IsEmpty then
+            if Length(LFlavorTexts) > 0 then
+            begin
+              FCurrentFlavorTexts := Copy(LFlavorTexts, 0, Length(LFlavorTexts));
+              SetLength(FCurrentFlavorTranslated, Length(LFlavorTexts));
+              FFlavorNeedsTranslation := LFlavorNeedsTranslation;
+              FFlavorTargetLang := LSystemLang;
+              if (LFlavorSelectedIdx >= 0) and
+                (LFlavorSelectedIdx <= High(FCurrentFlavorTranslated)) and
+                not LFlavorText.IsEmpty then
+                FCurrentFlavorTranslated[LFlavorSelectedIdx] := LFlavorText;
+              FStatsPanel.LoadFlavorOptions(LFlavorLabels, LFlavorTexts,
+                LFlavorText);
+            end
+            else if LFlavorText.IsEmpty then
+            begin
+              SetLength(FCurrentFlavorTexts, 0);
+              SetLength(FCurrentFlavorTranslated, 0);
+              FFlavorNeedsTranslation := False;
+              FFlavorTargetLang := '';
               FStatsPanel.LoadDescription(MSG_NOT_AVAILABLE_DESCRIPTION)
+            end
             else
+            begin
+              SetLength(FCurrentFlavorTexts, 0);
+              SetLength(FCurrentFlavorTranslated, 0);
+              FFlavorNeedsTranslation := False;
+              FFlavorTargetLang := '';
               FStatsPanel.LoadDescription(LFlavorText);
+            end;
             FEvolutionPanel.LoadChain(TPokemonController.FilterEvolutionChain
               (LChain, FCurrentId));
-            FStatsPanel.LoadEffects(LTypeEffects);
+            FStatsPanel.LoadEffects(LTypeEffects, LAbilityNote);
+            FStatsPanel.ResetMovePool;
+            FStatsPanel.ResetLocations;
             FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
             FreeAndNil(LPokemon);
@@ -802,6 +907,7 @@ end;
 
 procedure TPokedexView.btnNextClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if (FIsFavMode or FIsFilteredMode) then
   begin
     if FFilteredIdx < High(FFilteredList) then
@@ -816,6 +922,7 @@ end;
 
 procedure TPokedexView.btnPrevClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if (FIsFavMode or FIsFilteredMode) then
   begin
     if FFilteredIdx > 0 then
@@ -830,6 +937,7 @@ end;
 
 procedure TPokedexView.FavBtnClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if FCurrentId > 0 then
   begin
     FController.ToggleFavorite(FCurrentId);
@@ -841,6 +949,7 @@ procedure TPokedexView.FavModeClick(Sender: TObject);
 var
   LFavs: TArray<string>;
 begin
+  HideHistoryPanel;
   if FIsFavMode then
   begin
     FIsFavMode := False;
@@ -897,6 +1006,7 @@ end;
 
 procedure TPokedexView.ClearFilterClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   FIsFilteredMode := False;
   FIsFavMode := False;
   FClearFilterIcon.Visible := False;
@@ -905,21 +1015,25 @@ end;
 
 procedure TPokedexView.CryIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PlayCry;
 end;
 
 procedure TPokedexView.RandomIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PerformSearch(TPokemonController.RandomPokemonId.ToString);
 end;
 
 procedure TPokedexView.SearchIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   PerformSearch(FSearchEdit.Text);
 end;
 
 procedure TPokedexView.ShinyIconClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   FIsShiny := not FIsShiny;
   UpdateShinyIcon;
   ReloadSprite;
@@ -945,6 +1059,8 @@ begin
     FHistoryHoverIdx := -1;
     FHistoryOverlay.Redraw;
   end;
+  if Length(LHistory) = 0 then
+    HideHistoryPanel;
 end;
 
 procedure TPokedexView.SearchEditExit(Sender: TObject);
@@ -956,9 +1072,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
-          FIsHistoryVisible := False;
-          if Assigned(FHistoryPanel) then
-            FHistoryPanel.Visible := False;
+          HideHistoryPanel;
         end));
     end).Start;
 end;
@@ -1098,9 +1212,8 @@ begin
     begin
       FSearchEdit.Text := CapitalizePokemonName(LHistory[LIdx]);
       PerformSearch(LHistory[LIdx]);
-      FIsHistoryVisible := False;
-      FHistoryPanel.Visible := False;
     end;
+    HideHistoryPanel;
   end;
 end;
 
@@ -1175,11 +1288,11 @@ end;
 
 procedure TPokedexView.FormResize(Sender: TObject);
 begin
+  pnlTopContainer.SetBounds(0, 0, pnlImage.Width, SEARCH_H + (SEARCH_T * 2));
   CenterSearchBar;
   CenterSprite;
   if Assigned(FStatsPanel) and Assigned(pnlInfo) then
-    FStatsPanel.SetBounds(0, pnlTopContainer.Height, pnlInfo.Width,
-      pnlInfo.Height - pnlTopContainer.Height);
+    FStatsPanel.SetBounds(0, 0, pnlInfo.Width, pnlInfo.Height);
   if Assigned(FEvolutionPanel) then
     FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
       EVOLUTION_H);
@@ -1189,33 +1302,37 @@ procedure TPokedexView.CenterSprite;
 const
   ID_H = 18;
   NAME_H = 34;
+  FAV_H = 24;
+  NAME_BLOCK_H = NAME_H + FAV_H + 4;
   TYPE_H = 24;
   SHINY_H = 26;
   SHINY_W = 160;
 var
-  LAvailH, LTotalH, LGap, LY, LImgX: Integer;
+  LAvailH, LTotalH, LGap, LY, LImgX, LNameY, LFavY: Integer;
 begin
   LAvailH := pnlImage.Height - pnlTopContainer.Height;
-  LTotalH := ID_H + NAME_H + TYPE_H + SPRITE_SIZE + SHINY_H;
-  LGap := Max(6, (LAvailH - LTotalH) div 5);
+  LTotalH := ID_H + NAME_BLOCK_H + TYPE_H + SPRITE_SIZE + SHINY_H;
+  LGap := Max(10, (LAvailH - LTotalH) div 5);
   LY := pnlTopContainer.Height + LGap;
   LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
   if Assigned(FIdLabel) then
     FIdLabel.SetBounds(0, LY, pnlImage.Width, ID_H);
-  if Assigned(FFavBtn) then
-    FFavBtn.SetBounds(pnlImage.Width - 40, LY - 4, 24, 24);
   if Assigned(FDisplayNameLabel) then
     FDisplayNameLabel.SetBounds(0, LY + ID_H, pnlImage.Width, NAME_H);
-  LY := LY + ID_H + NAME_H + LGap;
+  LNameY := LY + ID_H;
+  LFavY := LNameY + NAME_H + 4;
+  if Assigned(FFavBtn) then
+    FFavBtn.SetBounds((pnlImage.Width - 24) div 2, LFavY, 24, 24);
+  btnPrev.SetBounds(20, LNameY + (NAME_H - btnPrev.Height) div 2, btnPrev.Width,
+    btnPrev.Height);
+  btnNext.SetBounds(pnlImage.Width - btnNext.Width - 20, LNameY +
+    (NAME_H - btnNext.Height) div 2, btnNext.Width, btnNext.Height);
+  LY := LY + ID_H + NAME_BLOCK_H + LGap;
   fpTypes.Top := LY;
   fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
   LY := LY + TYPE_H + LGap;
   if Assigned(FSpritePaintBox) then
     FSpritePaintBox.SetBounds(LImgX, LY, SPRITE_SIZE, SPRITE_SIZE);
-  btnPrev.SetBounds(LImgX - btnPrev.Width, LY + (SPRITE_SIZE - btnPrev.Height)
-    div 2, btnPrev.Width, btnPrev.Height);
-  btnNext.SetBounds(LImgX + SPRITE_SIZE, LY + (SPRITE_SIZE - btnNext.Height)
-    div 2, btnNext.Width, btnNext.Height);
   btnPrev.BringToFront;
   btnNext.BringToFront;
   LY := LY + SPRITE_SIZE + LGap;
@@ -1226,13 +1343,13 @@ end;
 procedure TPokedexView.CenterSearchBar;
 begin
   if Assigned(FSearchContainer) then
-    FSearchContainer.Left :=
-      (pnlTopContainer.Width - FSearchContainer.Width) div 2;
+    FSearchContainer.Left := (pnlImage.Width - FSearchContainer.Width) div 2;
 end;
 
 procedure TPokedexView.ImgPokemonMouseDown(Sender: TObject;
 Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+  HideHistoryPanel;
   if Button = mbLeft then
     PlayCry;
 end;
@@ -1240,6 +1357,171 @@ end;
 procedure TPokedexView.UpdateShinyIcon;
 begin
   FShinyBtn.Redraw;
+end;
+
+procedure TPokedexView.StatsPanelMovesTabRequested(Sender: TObject);
+var
+  LMovePoolRequestId: Int64;
+  LPokemonId: Integer;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  LPokemonId := FCurrentId;
+  Inc(FActiveMovePoolRequest);
+  LMovePoolRequestId := FActiveMovePoolRequest;
+  FStatsPanel.SetMovesLoading(True);
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LSections: TArray<TMovePoolSection>;
+      LErrorMsg: string;
+    begin
+      SetLength(LSections, 0);
+      LErrorMsg := '';
+      try
+        LSections := FController.GetMovePool(LPokemonId.ToString);
+      except
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := E.Message;
+      end;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if (LMovePoolRequestId <> FActiveMovePoolRequest) or
+            (FStatsPanel.ActiveTab <> stMoves) then
+            Exit;
+
+          if not LErrorMsg.IsEmpty then
+          begin
+            FStatsPanel.SetMovesLoading(False);
+            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+            Exit;
+          end;
+
+          FStatsPanel.LoadMovePool(LSections);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelLocationsTabRequested(Sender: TObject);
+var
+  LEncounterRequestId: Int64;
+  LPokemonId: Integer;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  LPokemonId := FCurrentId;
+  Inc(FActiveEncounterRequest);
+  LEncounterRequestId := FActiveEncounterRequest;
+  FStatsPanel.SetLocationsLoading(True);
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LSections: TArray<TEncounterSection>;
+      LErrorMsg: string;
+    begin
+      SetLength(LSections, 0);
+      LErrorMsg := '';
+      try
+        LSections := FController.GetEncounters(LPokemonId.ToString);
+      except
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := E.Message;
+      end;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if (LEncounterRequestId <> FActiveEncounterRequest) or
+            (FStatsPanel.ActiveTab <> stLocations) then
+            Exit;
+
+          if not LErrorMsg.IsEmpty then
+          begin
+            FStatsPanel.SetLocationsLoading(False);
+            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+            Exit;
+          end;
+
+          FStatsPanel.LoadLocations(LSections);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelFlavorOptionSelected(Sender: TObject;
+  AIndex: Integer);
+var
+  LFlavorRequestId: Int64;
+  LRawText: string;
+  LTargetLang: string;
+begin
+  HideHistoryPanel;
+
+  if (AIndex < 0) or (AIndex > High(FCurrentFlavorTexts)) then
+    Exit;
+
+  Inc(FActiveFlavorRequest);
+  LFlavorRequestId := FActiveFlavorRequest;
+
+  if AIndex <= High(FCurrentFlavorTranslated) then
+    if not FCurrentFlavorTranslated[AIndex].IsEmpty then
+    begin
+      FStatsPanel.SetFlavorDescription(FCurrentFlavorTranslated[AIndex]);
+      Exit;
+    end;
+
+  LRawText := FCurrentFlavorTexts[AIndex];
+  if LRawText.IsEmpty then
+  begin
+    FStatsPanel.SetFlavorDescription(MSG_NOT_AVAILABLE_DESCRIPTION);
+    Exit;
+  end;
+
+  if (not FFlavorNeedsTranslation) or FFlavorTargetLang.IsEmpty or
+    SameText(FFlavorTargetLang, 'en') then
+  begin
+    if AIndex <= High(FCurrentFlavorTranslated) then
+      FCurrentFlavorTranslated[AIndex] := LRawText;
+    FStatsPanel.SetFlavorDescription(LRawText);
+    Exit;
+  end;
+
+  LTargetLang := FFlavorTargetLang;
+  FStatsPanel.SetFlavorDescription('Traduzindo...');
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LTranslatedText: string;
+    begin
+      LTranslatedText := TPokemonController.Translate(LRawText, LTargetLang);
+      if LTranslatedText.IsEmpty then
+        LTranslatedText := LRawText;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if LFlavorRequestId <> FActiveFlavorRequest then
+            Exit;
+          if AIndex <= High(FCurrentFlavorTranslated) then
+            FCurrentFlavorTranslated[AIndex] := LTranslatedText;
+          FStatsPanel.SetFlavorDescription(LTranslatedText);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelInteracted(Sender: TObject);
+begin
+  HideHistoryPanel;
 end;
 
 procedure TPokedexView.SetLoading(const AValue: Boolean);
@@ -1282,8 +1564,9 @@ end;
 procedure TPokedexView.UpdatePokemonStats(APokemon: TPokemon);
 var
   LStats: TArray<TPokemonStat>;
-  LAbility: string;
+  LAbility, LGenderRatio, LEggGroups, LHatchCounter, LEggGroupName: string;
   I: Integer;
+  LFemaleRate, LMaleRate: Double;
 begin
   if Length(APokemon.Abilities) > 0 then
     LAbility := UpperCase(APokemon.Abilities[0].Ability.Name)
@@ -1298,6 +1581,38 @@ begin
     LStats[I].Value := APokemon.Stats[I].BaseStat;
   end;
   FStatsPanel.LoadStats(LStats);
+
+  LGenderRatio := '';
+  LEggGroups := '';
+  LHatchCounter := '';
+  if Assigned(APokemon.SpeciesData) then
+  begin
+    if APokemon.SpeciesData.GenderRate < 0 then
+      LGenderRatio := 'Sem genero'
+    else
+    begin
+      LFemaleRate := (APokemon.SpeciesData.GenderRate / 8.0) * 100.0;
+      LMaleRate := 100.0 - LFemaleRate;
+      LGenderRatio := Format('M %.1f%% / F %.1f%%', [LMaleRate, LFemaleRate]);
+    end;
+
+    for I := 0 to High(APokemon.SpeciesData.EggGroups) do
+    begin
+      LEggGroupName := TPokemonController.CapitalizeDisplayName(
+        APokemon.SpeciesData.EggGroups[I].Name);
+      if LEggGroups <> '' then
+        LEggGroups := LEggGroups + ', ';
+      LEggGroups := LEggGroups + LEggGroupName;
+    end;
+    if LEggGroups = '' then
+      LEggGroups := 'Indisponível';
+
+    if APokemon.SpeciesData.HatchCounter > 0 then
+      LHatchCounter := Format('%d ciclos', [APokemon.SpeciesData.HatchCounter])
+    else
+      LHatchCounter := 'Indisponível';
+  end;
+  FStatsPanel.LoadBreeding(LGenderRatio, LEggGroups, LHatchCounter);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);
@@ -1370,6 +1685,7 @@ end;
 
 procedure TPokedexView.TypeBadgeClick(Sender: TObject);
 begin
+  HideHistoryPanel;
   if Sender is TSkLabel then
     PerformSearch(TSkLabel(Sender).Caption.ToLower);
 end;

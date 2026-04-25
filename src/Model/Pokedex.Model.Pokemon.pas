@@ -76,10 +76,13 @@ type
     FText: string;
     [JSONName('language')]
     FLanguage: TApiResource;
+    [JSONName('version')]
+    FVersion: TApiResource;
   public
     destructor Destroy; override;
     property Text: string read FText write FText;
     property Language: TApiResource read FLanguage write FLanguage;
+    property Version: TApiResource read FVersion write FVersion;
   end;
 
   TPokemonSpecies = class
@@ -90,6 +93,12 @@ type
     FEvolutionChain: TApiResource;
     [JSONName('color')]
     FColor: TApiResource;
+    [JSONName('gender_rate')]
+    FGenderRate: Integer;
+    [JSONName('hatch_counter')]
+    FHatchCounter: Integer;
+    [JSONName('egg_groups')]
+    FEggGroups: TArray<TApiResource>;
   public
     destructor Destroy; override;
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
@@ -97,8 +106,22 @@ type
     property EvolutionChain: TApiResource read FEvolutionChain
       write FEvolutionChain;
     property Color: TApiResource read FColor write FColor;
+    property GenderRate: Integer read FGenderRate write FGenderRate;
+    property HatchCounter: Integer read FHatchCounter write FHatchCounter;
+    property EggGroups: TArray<TApiResource> read FEggGroups write FEggGroups;
 
     function GetDescription(const ALang: string = 'en'): string;
+  end;
+
+  TMovePoolSection = record
+    Title: string;
+    Moves: TArray<string>;
+    Types: TArray<string>;
+  end;
+
+  TEncounterSection = record
+    Title: string;
+    Locations: TArray<string>;
   end;
 
   TPokemon = class
@@ -122,6 +145,7 @@ type
     [JSONName('stats')]
     FStats: TArray<TStatEntry>;
     FSpeciesData: TPokemonSpecies;
+    FMovePool: TArray<TMovePoolSection>;
     function GetSpriteUrl: string;
 
   public
@@ -135,6 +159,7 @@ type
     property Species: TApiResource read FSpecies write FSpecies;
     property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
     property Stats: TArray<TStatEntry> read FStats write FStats;
+    property MovePool: TArray<TMovePoolSection> read FMovePool write FMovePool;
     property SpriteUrl: string read GetSpriteUrl;
     function ShinySpriteUrl: string;
     constructor Create;
@@ -269,6 +294,7 @@ end;
 destructor TFlavorText.Destroy;
 begin
   FreeAndNil(FLanguage);
+  FreeAndNil(FVersion);
   inherited;
 end;
 
@@ -276,9 +302,12 @@ end;
 destructor TPokemonSpecies.Destroy;
 var
   LEntry: TFlavorText;
+  LEggGroup: TApiResource;
 begin
   for LEntry in FFlavorEntries do
     LEntry.Free;
+  for LEggGroup in FEggGroups do
+    LEggGroup.Free;
   FreeAndNil(FEvolutionChain);
   FreeAndNil(FColor);
   inherited;

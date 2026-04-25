@@ -11,6 +11,7 @@ uses
   System.UITypes,
   VCL.Graphics,
   System.Generics.Collections,
+  System.Generics.Defaults,
   Pokedex.Service.Interfaces;
 
 type
@@ -35,7 +36,10 @@ type
     function ExecuteGetPokemon(const AIdOrName: string): TPokemon;
     function DownloadFile(const AUrl: string): TMemoryStream;
     function GetEvolutionChain(const AUrl: string): TArray<TEvolutionNode>;
-    function GetTypeEffectiveness(const ATypeNames: TArray<string>)
+    function GetMovePool(const AIdOrName: string): TArray<TMovePoolSection>;
+    function GetEncounters(const AIdOrName: string): TArray<TEncounterSection>;
+    function GetTypeEffectiveness(const ATypeNames: TArray<string>;
+      const AAbilityName: string = '')
       : TArray<TTypeEffect>;
     function GetAbilityDescription(const AName, ALang: string): string;
     class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
@@ -45,6 +49,9 @@ type
     class function GetCryUrl(const AId: Integer): string;
     class function GetColorByString(const AColorName: string): TColor;
     class function GetTypeColor(const ATypeName: string): TColor;
+    class function CapitalizeDisplayName(const AName: string;
+      const ASeparator: string = ' '): string;
+    class function GetDefensiveAbilityNote(const AAbilityName: string): string;
     class function GetSystemLanguage: string;
     class function GetPreferredLanguage: string;
     class function Translate(const AText, AToLang: string): string;
@@ -408,6 +415,203 @@ begin
   end;
 end;
 
+function TPokemonController.GetMovePool(const AIdOrName: string)
+  : TArray<TMovePoolSection>;
+var
+  LContent: string;
+  LRoot: TJSONValue;
+  LObj, LMoveObj, LDetailObj, LMethodObj: TJSONObject;
+  LMoves, LDetails: TJSONArray;
+  I, J, LLevel: Integer;
+  LMoveName, LMethodName, LMoveUrl: string;
+  LLevelMap: TDictionary<string, Integer>;
+  LMoveTypeMap: TDictionary<string, string>;
+  LEggMoves, LMachineMoves, LLevelMoves: TStringList;
+  LPair: TPair<string, Integer>;
+
+  procedure AddUniqueFormatted(ATarget: TStringList; const AName: string);
+  var
+    LFormatted: string;
+  begin
+    LFormatted := CapitalizeDisplayName(AName);
+    if ATarget.IndexOf(LFormatted) < 0 then
+      ATarget.Add(LFormatted);
+  end;
+
+  function GetMoveType(const AName, AUrl: string): string;
+  var
+    LMoveJson: string;
+    LMoveRoot, LTypeValue: TJSONValue;
+  begin
+    Result := '';
+    if AName.IsEmpty then
+      Exit;
+    if LMoveTypeMap.TryGetValue(AName, Result) then
+      Exit;
+    if AUrl.IsEmpty then
+    begin
+      LMoveTypeMap.AddOrSetValue(AName, '');
+      Exit;
+    end;
+
+    try
+      LMoveJson := FService.GetTypeJSON(AUrl);
+      LMoveRoot := TJSONObject.ParseJSONValue(LMoveJson);
+      try
+        if Assigned(LMoveRoot) and (LMoveRoot is TJSONObject) then
+        begin
+          LTypeValue := TJSONObject(LMoveRoot).GetValue('type');
+          if Assigned(LTypeValue) and (LTypeValue is TJSONObject) then
+            Result := TJSONObject(LTypeValue).GetValue<string>('name', '');
+        end;
+      finally
+        LMoveRoot.Free;
+      end;
+    except
+      Result := '';
+    end;
+
+    LMoveTypeMap.AddOrSetValue(AName, Result);
+  end;
+
+  function GetCachedMoveType(const ADisplayName: string): string;
+  var
+    LMoveKey: string;
+  begin
+    Result := '';
+    LMoveKey := ADisplayName.Replace(' ', '-').ToLower;
+    LMoveTypeMap.TryGetValue(LMoveKey, Result);
+  end;
+
+begin
+  SetLength(Result, 0);
+  LContent := FService.GetPokemonJSON(AIdOrName);
+  if LContent.IsEmpty then
+    Exit;
+
+  LRoot := TJSONObject.ParseJSONValue(LContent);
+  if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
+  begin
+    LRoot.Free;
+    Exit;
+  end;
+
+  LLevelMap := TDictionary<string, Integer>.Create;
+  LMoveTypeMap := TDictionary<string, string>.Create;
+  LEggMoves := TStringList.Create;
+  LMachineMoves := TStringList.Create;
+  LLevelMoves := TStringList.Create;
+  try
+    LEggMoves.Sorted := True;
+    LEggMoves.Duplicates := dupIgnore;
+    LMachineMoves.Sorted := True;
+    LMachineMoves.Duplicates := dupIgnore;
+    LObj := TJSONObject(LRoot);
+    LMoves := TJSONArray(LObj.GetValue('moves'));
+    if not Assigned(LMoves) then
+      Exit;
+
+    for I := 0 to LMoves.Count - 1 do
+    begin
+      if not(LMoves.Items[I] is TJSONObject) then
+        Continue;
+      LMoveObj := TJSONObject(TJSONObject(LMoves.Items[I]).GetValue('move'));
+      if not Assigned(LMoveObj) then
+        Continue;
+      LMoveName := LMoveObj.GetValue<string>('name', '');
+      LMoveUrl := LMoveObj.GetValue<string>('url', '');
+      if LMoveName.IsEmpty then
+        Continue;
+      GetMoveType(LMoveName, LMoveUrl);
+
+      LDetails := TJSONArray(TJSONObject(LMoves.Items[I]).GetValue
+        ('version_group_details'));
+      if not Assigned(LDetails) then
+        Continue;
+
+      for J := 0 to LDetails.Count - 1 do
+      begin
+        if not(LDetails.Items[J] is TJSONObject) then
+          Continue;
+        LDetailObj := TJSONObject(LDetails.Items[J]);
+        LMethodObj := TJSONObject(LDetailObj.GetValue('move_learn_method'));
+        if not Assigned(LMethodObj) then
+          Continue;
+
+        LMethodName := LMethodObj.GetValue<string>('name', '');
+        if LMethodName = 'level-up' then
+        begin
+          LLevel := LDetailObj.GetValue<Integer>('level_learned_at', 0);
+          if LLevelMap.ContainsKey(LMoveName) then
+          begin
+            if LLevel < LLevelMap[LMoveName] then
+              LLevelMap[LMoveName] := LLevel;
+          end
+          else
+            LLevelMap.Add(LMoveName, LLevel);
+        end
+        else if LMethodName = 'machine' then
+          AddUniqueFormatted(LMachineMoves, LMoveName)
+        else if LMethodName = 'egg' then
+          AddUniqueFormatted(LEggMoves, LMoveName);
+      end;
+    end;
+
+    for LPair in LLevelMap do
+      LLevelMoves.Add(Format('%.3d|%s', [LPair.Value,
+        CapitalizeDisplayName(LPair.Key)]));
+    LLevelMoves.Sort;
+
+    if LLevelMoves.Count > 0 then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)].Title := 'LEVEL-UP';
+      SetLength(Result[High(Result)].Moves, LLevelMoves.Count);
+      SetLength(Result[High(Result)].Types, LLevelMoves.Count);
+      for I := 0 to LLevelMoves.Count - 1 do
+      begin
+        Result[High(Result)].Moves[I] :=
+          'Lv.' + IntToStr(StrToIntDef(LLevelMoves[I].Substring(0, 3), 0)) +
+          ' ' + LLevelMoves[I].Substring(4);
+        Result[High(Result)].Types[I] := GetCachedMoveType(LLevelMoves[I].Substring(4));
+      end;
+    end;
+
+    if LMachineMoves.Count > 0 then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)].Title := 'TM';
+      SetLength(Result[High(Result)].Moves, LMachineMoves.Count);
+      SetLength(Result[High(Result)].Types, LMachineMoves.Count);
+      for I := 0 to LMachineMoves.Count - 1 do
+      begin
+        Result[High(Result)].Moves[I] := LMachineMoves[I];
+        Result[High(Result)].Types[I] := GetCachedMoveType(LMachineMoves[I]);
+      end;
+    end;
+
+    if LEggMoves.Count > 0 then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)].Title := 'EGG';
+      SetLength(Result[High(Result)].Moves, LEggMoves.Count);
+      SetLength(Result[High(Result)].Types, LEggMoves.Count);
+      for I := 0 to LEggMoves.Count - 1 do
+      begin
+        Result[High(Result)].Moves[I] := LEggMoves[I];
+        Result[High(Result)].Types[I] := GetCachedMoveType(LEggMoves[I]);
+      end;
+    end;
+  finally
+    LLevelMap.Free;
+    LMoveTypeMap.Free;
+    LEggMoves.Free;
+    LMachineMoves.Free;
+    LLevelMoves.Free;
+    LRoot.Free;
+  end;
+end;
+
 class function TPokemonController.FilterEvolutionChain
   (const AChain: TArray<TEvolutionNode>; const AActivePokemonId: Integer)
   : TArray<TEvolutionNode>;
@@ -523,10 +727,38 @@ begin
     + AId.ToString + '.ogg';
 end;
 
+class function TPokemonController.CapitalizeDisplayName(const AName: string;
+  const ASeparator: string): string;
+var
+  LParts: TArray<string>;
+  I: Integer;
+begin
+  if AName.IsEmpty then
+    Exit('');
+  LParts := AName.Split(['-']);
+  for I := 0 to High(LParts) do
+    if LParts[I] <> '' then
+      LParts[I] := LParts[I].Substring(0, 1).ToUpper + LParts[I].Substring(1);
+  Result := string.Join(ASeparator, LParts);
+end;
+
 class function TPokemonController.GetTypeColor(const ATypeName: string): TColor;
 begin
   if not FTypeColors.TryGetValue(ATypeName.ToLower, Result) then
     Result := $00A8A8A8;
+end;
+
+class function TPokemonController.GetDefensiveAbilityNote(
+  const AAbilityName: string): string;
+var
+  LAbility: string;
+begin
+  LAbility := AAbilityName.ToLower.Trim;
+  if (LAbility = 'levitate') or (LAbility = 'thick-fat') or
+    (LAbility = 'filter') then
+    Result := UpperCase(CapitalizeDisplayName(LAbility))
+  else
+    Result := '';
 end;
 
 class procedure TPokemonController.InitializeColorMaps;
@@ -565,8 +797,97 @@ begin
 
 end;
 
+function TPokemonController.GetEncounters(const AIdOrName: string)
+  : TArray<TEncounterSection>;
+var
+  LContent: string;
+  LRoot: TJSONValue;
+  LArray, LVersionDetails: TJSONArray;
+  LEncounterObj, LLocationObj, LVersionObj, LVersionDetailObj: TJSONObject;
+  I, J, LSectionIdx, K: Integer;
+  LLocationName, LVersionName: string;
+  LLocationsByVersion: TDictionary<string, TStringList>;
+  LPair: TPair<string, TStringList>;
+begin
+  SetLength(Result, 0);
+  LContent := FService.GetEncountersJSON(AIdOrName);
+  if LContent.IsEmpty then
+    Exit;
+
+  LRoot := TJSONObject.ParseJSONValue(LContent);
+  if not(Assigned(LRoot) and (LRoot is TJSONArray)) then
+  begin
+    LRoot.Free;
+    Exit;
+  end;
+
+  LLocationsByVersion := TDictionary<string, TStringList>.Create;
+  try
+    LArray := TJSONArray(LRoot);
+    for I := 0 to LArray.Count - 1 do
+    begin
+      if not(LArray.Items[I] is TJSONObject) then
+        Continue;
+      LEncounterObj := TJSONObject(LArray.Items[I]);
+      LLocationObj := TJSONObject(LEncounterObj.GetValue('location_area'));
+      if not Assigned(LLocationObj) then
+        Continue;
+
+      LLocationName := CapitalizeDisplayName(LLocationObj.GetValue<string>('name', ''));
+      if LLocationName.IsEmpty then
+        Continue;
+
+      LVersionDetails := TJSONArray(LEncounterObj.GetValue('version_details'));
+      if not Assigned(LVersionDetails) then
+        Continue;
+
+      for J := 0 to LVersionDetails.Count - 1 do
+      begin
+        if not(LVersionDetails.Items[J] is TJSONObject) then
+          Continue;
+        LVersionDetailObj := TJSONObject(LVersionDetails.Items[J]);
+        LVersionObj := TJSONObject(LVersionDetailObj.GetValue('version'));
+        if not Assigned(LVersionObj) then
+          Continue;
+        LVersionName := CapitalizeDisplayName(LVersionObj.GetValue<string>('name', ''));
+        if LVersionName.IsEmpty then
+          Continue;
+
+        if not LLocationsByVersion.ContainsKey(LVersionName) then
+        begin
+          LLocationsByVersion.Add(LVersionName, TStringList.Create);
+          LLocationsByVersion[LVersionName].Sorted := True;
+          LLocationsByVersion[LVersionName].Duplicates := dupIgnore;
+        end;
+        LLocationsByVersion[LVersionName].Add(LLocationName);
+      end;
+    end;
+
+    for LPair in LLocationsByVersion do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      LSectionIdx := High(Result);
+      Result[LSectionIdx].Title := LPair.Key;
+      SetLength(Result[LSectionIdx].Locations, LPair.Value.Count);
+      for K := 0 to LPair.Value.Count - 1 do
+        Result[LSectionIdx].Locations[K] := LPair.Value[K];
+    end;
+
+    TArray.Sort<TEncounterSection>(Result, TComparer<TEncounterSection>.Construct(
+      function(const Left, Right: TEncounterSection): Integer
+      begin
+        Result := CompareText(Left.Title, Right.Title);
+      end));
+  finally
+    for LPair in LLocationsByVersion do
+      LPair.Value.Free;
+    LLocationsByVersion.Free;
+    LRoot.Free;
+  end;
+end;
+
 function TPokemonController.GetTypeEffectiveness(const ATypeNames
-  : TArray<string>): TArray<TTypeEffect>;
+  : TArray<string>; const AAbilityName: string): TArray<TTypeEffect>;
 const
   ALL_TYPES: array [0 .. 17] of string = ('normal', 'fire', 'water', 'electric',
     'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
@@ -580,6 +901,7 @@ var
   LPair: TPair<string, Single>;
   LTmp: TTypeEffect;
   J: Integer;
+  LAbility: string;
 
   procedure ApplyMult(const AKey: string; AMult: Single);
   var
@@ -635,6 +957,19 @@ begin
         // type data is non-critical, continue with partial result
       end;
     end;
+
+    LAbility := AAbilityName.ToLower.Trim;
+    if LAbility = 'levitate' then
+      LMap['ground'] := 0.0
+    else if LAbility = 'thick-fat' then
+    begin
+      LMap['fire'] := LMap['fire'] * 0.5;
+      LMap['ice'] := LMap['ice'] * 0.5;
+    end
+    else if LAbility = 'filter' then
+      for LTypeName in ALL_TYPES do
+        if LMap[LTypeName] > 1.0 then
+          LMap[LTypeName] := LMap[LTypeName] * 0.75;
 
     LCount := 0;
     for LPair in LMap do

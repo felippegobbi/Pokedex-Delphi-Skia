@@ -18,6 +18,7 @@ type
     function GetSpeciesJSON(const AUrl: string): string;
     function GetEvolutionChainJSON(const AUrl: string): string;
     function GetTypeJSON(const AUrl: string): string;
+    function GetEncountersJSON(const AIdOrName: string): string;
   end;
 
 var
@@ -76,6 +77,12 @@ end;
 function TdmPokeService.GetTypeJSON(const AUrl: string): string;
 begin
   Result := DoGet(AUrl);
+end;
+
+function TdmPokeService.GetEncountersJSON(const AIdOrName: string): string;
+begin
+  Result := DoGet(BASE_URL + '/pokemon/' + LowerCase(Trim(AIdOrName)) +
+    '/encounters');
 end;
 
 end.
