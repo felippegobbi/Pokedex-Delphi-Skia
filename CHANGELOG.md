@@ -55,6 +55,59 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - **Move list density increased to 4 columns**: The move-learning grid now expands up to four columns when a species has a very dense movepool, reducing clipped chips.
 - **Densidade da lista de golpes aumentada para 4 colunas**: A grade de aprendizagem de golpes agora se expande em até quatro colunas quando a espécie tem um movepool muito denso, reduzindo chips cortados.
 
+## [5.7.4] - 2026-04-23
+
+### Added / Adicionado
+
+- **Flavor text version selector**: The stats tab can now expose multiple native `pokemon-species` flavor texts by game version, letting the user switch entries inline.
+- **Seletor de versão do flavor text**: A aba de stats agora pode expor múltiplos flavor texts nativos de `pokemon-species` por versão de jogo, permitindo alternar as entradas inline.
+
+### Technical / Técnico
+
+- **Flavor entry model expansion**: `TFlavorText` now maps the `version` resource so the UI can label each description correctly.
+- **Expansão do modelo de flavor entry**: `TFlavorText` agora mapeia o recurso `version` para que a UI consiga rotular cada descrição corretamente.
+
+## [5.7.5] - 2026-04-23
+
+### Changed / Alterado
+
+- **Scrollable flavor dropdown overlay**: The game-version selector now opens as an overlay with its own scroll, instead of pushing the stats content downward.
+- **Dropdown de flavor com scroll em overlay**: O seletor de versao do flavor agora abre como um overlay com scroll proprio, em vez de empurrar o conteudo de stats para baixo.
+- **Lazy translation for version entries**: Flavor texts from English fallback are now translated only for the selected game entry, which reduces the delay when opening a Pokemon from search.
+- **Traducao sob demanda para versoes**: Flavor texts vindos do fallback em ingles agora sao traduzidos apenas para a entrada de jogo selecionada, reduzindo a demora ao abrir um Pokemon pela busca.
+
+## [5.7.6] - 2026-04-23
+
+### Changed / Alterado
+
+- **Paged TM and Egg lists**: The `TM` and `EGG` sections now use a simple page selector (`1`, `2`, etc.) when the move list exceeds the visible space.
+- **Listas de TM e Egg com paginas**: As secoes `TM` e `EGG` agora usam um seletor simples de paginas (`1`, `2`, etc.) quando a lista de golpes excede o espaco visivel.
+- **Move layout back to 3 columns**: Dense move lists were rebalanced to three columns, reducing clipping while keeping the chips readable.
+- **Layout de golpes de volta para 3 colunas**: Listas densas de golpes foram reequilibradas para tres colunas, reduzindo cortes sem sacrificar a leitura dos chips.
+
+## [5.7.8] - 2026-04-25
+
+### Changed / Alterado
+
+- **Location entries as chips**: Encounter locations in the `LOCALIZACOES` tab now render as flowing chips (same style as move badges), replacing the previous indented list.
+- **Locais de encontro como chips**: Os locais de encontro na aba `LOCALIZACOES` agora são renderizados como chips flutuantes (mesmo estilo dos badges de golpes), substituindo a lista anterior com recuo.
+- **Centered defensive type badges**: The type effectiveness badges in the stats tab are now centered per row, consistent with the flavor dropdown and other panel content.
+- **Badges de tipo defensivo centralizados**: Os badges de efetividade de tipo na aba de stats agora são centralizados por linha, consistente com o dropdown de flavor e demais conteúdos do painel.
+- **More locations per page**: The `LOCALIZACOES` tab now shows up to 8 game-version sections per page (previously 3), reducing unnecessary pagination for most species.
+- **Mais localizacoes por pagina**: A aba `LOCALIZACOES` agora exibe ate 8 secoes de versao de jogo por pagina (antes 3), reduzindo a paginacao desnecessaria para a maioria das especies.
+
+## [5.7.7] - 2026-04-23
+
+### Added / Adicionado
+
+- **Lazy-loaded locations tab**: The stats panel now includes a `LOCALIZACOES` tab that loads encounter locations on demand from `pokemon/{id}/encounters`.
+- **Aba de localizacoes sob demanda**: O painel de stats agora inclui uma aba `LOCALIZACOES` que carrega os locais de encontro sob demanda a partir de `pokemon/{id}/encounters`.
+
+### Changed / Alterado
+
+- **Centered game dropdown**: The flavor-version dropdown was centered within the stats content area for cleaner alignment.
+- **Dropdown de jogos centralizado**: O dropdown de versoes do flavor foi centralizado dentro da area de stats para um alinhamento mais limpo.
+
 ## [5.6.0] - 2026-04-23
 
 ### Added / Adicionado

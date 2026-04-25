@@ -76,10 +76,13 @@ type
     FText: string;
     [JSONName('language')]
     FLanguage: TApiResource;
+    [JSONName('version')]
+    FVersion: TApiResource;
   public
     destructor Destroy; override;
     property Text: string read FText write FText;
     property Language: TApiResource read FLanguage write FLanguage;
+    property Version: TApiResource read FVersion write FVersion;
   end;
 
   TPokemonSpecies = class
@@ -114,6 +117,11 @@ type
     Title: string;
     Moves: TArray<string>;
     Types: TArray<string>;
+  end;
+
+  TEncounterSection = record
+    Title: string;
+    Locations: TArray<string>;
   end;
 
   TPokemon = class
@@ -286,6 +294,7 @@ end;
 destructor TFlavorText.Destroy;
 begin
   FreeAndNil(FLanguage);
+  FreeAndNil(FVersion);
   inherited;
 end;
 

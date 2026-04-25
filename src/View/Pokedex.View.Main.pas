@@ -82,6 +82,12 @@ type
     FLoadingTimer: TTimer;
     FActiveSearchRequest: Int64;
     FActiveMovePoolRequest: Int64;
+    FActiveEncounterRequest: Int64;
+    FActiveFlavorRequest: Int64;
+    FCurrentFlavorTexts: TArray<string>;
+    FCurrentFlavorTranslated: TArray<string>;
+    FFlavorNeedsTranslation: Boolean;
+    FFlavorTargetLang: string;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -116,6 +122,8 @@ type
     procedure FavModeClick(Sender: TObject);
     procedure UpdateFavIcons;
     procedure StatsPanelMovesTabRequested(Sender: TObject);
+    procedure StatsPanelLocationsTabRequested(Sender: TObject);
+    procedure StatsPanelFlavorOptionSelected(Sender: TObject; AIndex: Integer);
     procedure StatsPanelInteracted(Sender: TObject);
     procedure SetLoading(const AValue: Boolean);
     procedure LoadingTimerTick(Sender: TObject);
@@ -420,6 +428,8 @@ begin
   FStatsPanel.FontFamily := FONT_FAMILY;
   FStatsPanel.OnInteract := StatsPanelInteracted;
   FStatsPanel.OnMovesTabRequested := StatsPanelMovesTabRequested;
+  FStatsPanel.OnLocationsTabRequested := StatsPanelLocationsTabRequested;
+  FStatsPanel.OnFlavorOptionSelected := StatsPanelFlavorOptionSelected;
 end;
 
 procedure TPokedexView.SetupEvolutionPanel;
@@ -540,6 +550,8 @@ begin
 
   Inc(FActiveSearchRequest);
   Inc(FActiveMovePoolRequest);
+  Inc(FActiveEncounterRequest);
+  Inc(FActiveFlavorRequest);
   LSearchRequestId := FActiveSearchRequest;
   FSearchEdit.Enabled := False;
   btnNext.Visible := False;
@@ -558,12 +570,14 @@ begin
       LTypeEffects: TArray<TTypeEffect>;
       LAbilityName, LAbilityDesc, LAbilityNote, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
-      LTypeNames, LTypeList: TArray<string>;
+      LTypeNames, LTypeList, LFlavorLabels, LFlavorTexts: TArray<string>;
       I: Integer;
       LSearchTerm: string;
       LIsNavigating: Boolean;
       LUseShiny: Boolean;
       LShowShinyUnavailable: Boolean;
+      LFlavorSelectedIdx: Integer;
+      LFlavorNeedsTranslation: Boolean;
     begin
       LPokemon := nil;
       LStream := nil;
@@ -571,14 +585,20 @@ begin
       LDominantColor := 0;
       LUseShiny := False;
       LShowShinyUnavailable := False;
+      LFlavorSelectedIdx := -1;
+      LFlavorNeedsTranslation := False;
       LSearchTerm := AIdOrName.ToLower.Trim;
       SetLength(LChain, 0);
       SetLength(LTypeEffects, 0);
+      SetLength(LFlavorLabels, 0);
+      SetLength(LFlavorTexts, 0);
       LAbilityName := '';
       LAbilityDesc := '';
       LAbilityNote := '';
       var
         LFlavorText: string := '';
+      var
+        LFlavorEntryLang: string := '';
       var
         LPokeAPILang: string := TPokemonController.GetPreferredLanguage;
       var
@@ -671,16 +691,50 @@ begin
         if Length(LTypeNames) > 0 then
           LTypeEffects := FController.GetTypeEffectiveness(LTypeNames, LAbilityName);
         if Assigned(LPokemon.SpeciesData) then
+        begin
           LFlavorText := LPokemon.SpeciesData.GetDescription(LPokeAPILang);
-        // MyMemory only when PokeAPI has no native entry (e.g. pt-BR)
+          if not LFlavorText.IsEmpty then
+            LFlavorEntryLang := LPokeAPILang
+          else
+          begin
+            LFlavorText := LPokemon.SpeciesData.GetDescription('en');
+            if not LFlavorText.IsEmpty then
+              LFlavorEntryLang := 'en';
+          end;
+        end;
+
         if (LPokeAPILang = 'en') and (LSystemLang <> 'en') then
         begin
           if not LAbilityDesc.IsEmpty then
             LAbilityDesc := TPokemonController.Translate(LAbilityDesc,
               LSystemLang);
-          if not LFlavorText.IsEmpty then
-            LFlavorText := TPokemonController.Translate(LFlavorText,
-              LSystemLang);
+        end;
+
+        if Assigned(LPokemon.SpeciesData) then
+          for I := 0 to High(LPokemon.SpeciesData.FlavorEntries) do
+            if Assigned(LPokemon.SpeciesData.FlavorEntries[I].Language) and
+              SameText(LPokemon.SpeciesData.FlavorEntries[I].Language.Name,
+              LFlavorEntryLang) and
+              Assigned(LPokemon.SpeciesData.FlavorEntries[I].Version) then
+            begin
+              SetLength(LFlavorLabels, Length(LFlavorLabels) + 1);
+              SetLength(LFlavorTexts, Length(LFlavorTexts) + 1);
+              LFlavorLabels[High(LFlavorLabels)] :=
+                TPokemonController.CapitalizeDisplayName(
+                LPokemon.SpeciesData.FlavorEntries[I].Version.Name);
+              LFlavorTexts[High(LFlavorTexts)] :=
+                LPokemon.SpeciesData.FlavorEntries[I].Text.Replace(#10, ' ')
+                .Replace(#12, ' ').Replace(#13, ' ');
+            end;
+
+        if Length(LFlavorTexts) > 0 then
+        begin
+          LFlavorSelectedIdx := High(LFlavorTexts);
+          LFlavorText := LFlavorTexts[LFlavorSelectedIdx];
+          LFlavorNeedsTranslation := (LSystemLang <> 'en') and
+            SameText(LFlavorEntryLang, 'en');
+          if LFlavorNeedsTranslation then
+            LFlavorText := TPokemonController.Translate(LFlavorText, LSystemLang);
         end;
       except
         on E: EPokemonNotFound do
@@ -809,14 +863,40 @@ begin
             FSpritePaintBox.Redraw;
             UpdatePokemonStats(LPokemon);
             UpdatePokemonTypes(LPokemon);
-            if LFlavorText.IsEmpty then
+            if Length(LFlavorTexts) > 0 then
+            begin
+              FCurrentFlavorTexts := Copy(LFlavorTexts, 0, Length(LFlavorTexts));
+              SetLength(FCurrentFlavorTranslated, Length(LFlavorTexts));
+              FFlavorNeedsTranslation := LFlavorNeedsTranslation;
+              FFlavorTargetLang := LSystemLang;
+              if (LFlavorSelectedIdx >= 0) and
+                (LFlavorSelectedIdx <= High(FCurrentFlavorTranslated)) and
+                not LFlavorText.IsEmpty then
+                FCurrentFlavorTranslated[LFlavorSelectedIdx] := LFlavorText;
+              FStatsPanel.LoadFlavorOptions(LFlavorLabels, LFlavorTexts,
+                LFlavorText);
+            end
+            else if LFlavorText.IsEmpty then
+            begin
+              SetLength(FCurrentFlavorTexts, 0);
+              SetLength(FCurrentFlavorTranslated, 0);
+              FFlavorNeedsTranslation := False;
+              FFlavorTargetLang := '';
               FStatsPanel.LoadDescription(MSG_NOT_AVAILABLE_DESCRIPTION)
+            end
             else
+            begin
+              SetLength(FCurrentFlavorTexts, 0);
+              SetLength(FCurrentFlavorTranslated, 0);
+              FFlavorNeedsTranslation := False;
+              FFlavorTargetLang := '';
               FStatsPanel.LoadDescription(LFlavorText);
+            end;
             FEvolutionPanel.LoadChain(TPokemonController.FilterEvolutionChain
               (LChain, FCurrentId));
             FStatsPanel.LoadEffects(LTypeEffects, LAbilityNote);
             FStatsPanel.ResetMovePool;
+            FStatsPanel.ResetLocations;
             FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
             FreeAndNil(LPokemon);
@@ -1324,6 +1404,117 @@ begin
           end;
 
           FStatsPanel.LoadMovePool(LSections);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelLocationsTabRequested(Sender: TObject);
+var
+  LEncounterRequestId: Int64;
+  LPokemonId: Integer;
+begin
+  if FCurrentId = 0 then
+    Exit;
+
+  LPokemonId := FCurrentId;
+  Inc(FActiveEncounterRequest);
+  LEncounterRequestId := FActiveEncounterRequest;
+  FStatsPanel.SetLocationsLoading(True);
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LSections: TArray<TEncounterSection>;
+      LErrorMsg: string;
+    begin
+      SetLength(LSections, 0);
+      LErrorMsg := '';
+      try
+        LSections := FController.GetEncounters(LPokemonId.ToString);
+      except
+        on E: EPokemonNetworkError do
+          LErrorMsg := MSG_NETWORK_ERROR;
+        on E: Exception do
+          LErrorMsg := E.Message;
+      end;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if (LEncounterRequestId <> FActiveEncounterRequest) or
+            (FStatsPanel.ActiveTab <> stLocations) then
+            Exit;
+
+          if not LErrorMsg.IsEmpty then
+          begin
+            FStatsPanel.SetLocationsLoading(False);
+            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+            Exit;
+          end;
+
+          FStatsPanel.LoadLocations(LSections);
+        end));
+    end).Start;
+end;
+
+procedure TPokedexView.StatsPanelFlavorOptionSelected(Sender: TObject;
+  AIndex: Integer);
+var
+  LFlavorRequestId: Int64;
+  LRawText: string;
+  LTargetLang: string;
+begin
+  HideHistoryPanel;
+
+  if (AIndex < 0) or (AIndex > High(FCurrentFlavorTexts)) then
+    Exit;
+
+  Inc(FActiveFlavorRequest);
+  LFlavorRequestId := FActiveFlavorRequest;
+
+  if AIndex <= High(FCurrentFlavorTranslated) then
+    if not FCurrentFlavorTranslated[AIndex].IsEmpty then
+    begin
+      FStatsPanel.SetFlavorDescription(FCurrentFlavorTranslated[AIndex]);
+      Exit;
+    end;
+
+  LRawText := FCurrentFlavorTexts[AIndex];
+  if LRawText.IsEmpty then
+  begin
+    FStatsPanel.SetFlavorDescription(MSG_NOT_AVAILABLE_DESCRIPTION);
+    Exit;
+  end;
+
+  if (not FFlavorNeedsTranslation) or FFlavorTargetLang.IsEmpty or
+    SameText(FFlavorTargetLang, 'en') then
+  begin
+    if AIndex <= High(FCurrentFlavorTranslated) then
+      FCurrentFlavorTranslated[AIndex] := LRawText;
+    FStatsPanel.SetFlavorDescription(LRawText);
+    Exit;
+  end;
+
+  LTargetLang := FFlavorTargetLang;
+  FStatsPanel.SetFlavorDescription('Traduzindo...');
+
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LTranslatedText: string;
+    begin
+      LTranslatedText := TPokemonController.Translate(LRawText, LTargetLang);
+      if LTranslatedText.IsEmpty then
+        LTranslatedText := LRawText;
+
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if LFlavorRequestId <> FActiveFlavorRequest then
+            Exit;
+          if AIndex <= High(FCurrentFlavorTranslated) then
+            FCurrentFlavorTranslated[AIndex] := LTranslatedText;
+          FStatsPanel.SetFlavorDescription(LTranslatedText);
         end));
     end).Start;
 end;

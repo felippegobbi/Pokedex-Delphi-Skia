@@ -11,6 +11,7 @@ uses
   System.UITypes,
   VCL.Graphics,
   System.Generics.Collections,
+  System.Generics.Defaults,
   Pokedex.Service.Interfaces;
 
 type
@@ -36,6 +37,7 @@ type
     function DownloadFile(const AUrl: string): TMemoryStream;
     function GetEvolutionChain(const AUrl: string): TArray<TEvolutionNode>;
     function GetMovePool(const AIdOrName: string): TArray<TMovePoolSection>;
+    function GetEncounters(const AIdOrName: string): TArray<TEncounterSection>;
     function GetTypeEffectiveness(const ATypeNames: TArray<string>;
       const AAbilityName: string = '')
       : TArray<TTypeEffect>;
@@ -793,6 +795,95 @@ begin
   FSpeciesColors.Add('white', WHITE_COLOR);
   FSpeciesColors.Add('yellow', YELLOW_COLOR);
 
+end;
+
+function TPokemonController.GetEncounters(const AIdOrName: string)
+  : TArray<TEncounterSection>;
+var
+  LContent: string;
+  LRoot: TJSONValue;
+  LArray, LVersionDetails: TJSONArray;
+  LEncounterObj, LLocationObj, LVersionObj, LVersionDetailObj: TJSONObject;
+  I, J, LSectionIdx, K: Integer;
+  LLocationName, LVersionName: string;
+  LLocationsByVersion: TDictionary<string, TStringList>;
+  LPair: TPair<string, TStringList>;
+begin
+  SetLength(Result, 0);
+  LContent := FService.GetEncountersJSON(AIdOrName);
+  if LContent.IsEmpty then
+    Exit;
+
+  LRoot := TJSONObject.ParseJSONValue(LContent);
+  if not(Assigned(LRoot) and (LRoot is TJSONArray)) then
+  begin
+    LRoot.Free;
+    Exit;
+  end;
+
+  LLocationsByVersion := TDictionary<string, TStringList>.Create;
+  try
+    LArray := TJSONArray(LRoot);
+    for I := 0 to LArray.Count - 1 do
+    begin
+      if not(LArray.Items[I] is TJSONObject) then
+        Continue;
+      LEncounterObj := TJSONObject(LArray.Items[I]);
+      LLocationObj := TJSONObject(LEncounterObj.GetValue('location_area'));
+      if not Assigned(LLocationObj) then
+        Continue;
+
+      LLocationName := CapitalizeDisplayName(LLocationObj.GetValue<string>('name', ''));
+      if LLocationName.IsEmpty then
+        Continue;
+
+      LVersionDetails := TJSONArray(LEncounterObj.GetValue('version_details'));
+      if not Assigned(LVersionDetails) then
+        Continue;
+
+      for J := 0 to LVersionDetails.Count - 1 do
+      begin
+        if not(LVersionDetails.Items[J] is TJSONObject) then
+          Continue;
+        LVersionDetailObj := TJSONObject(LVersionDetails.Items[J]);
+        LVersionObj := TJSONObject(LVersionDetailObj.GetValue('version'));
+        if not Assigned(LVersionObj) then
+          Continue;
+        LVersionName := CapitalizeDisplayName(LVersionObj.GetValue<string>('name', ''));
+        if LVersionName.IsEmpty then
+          Continue;
+
+        if not LLocationsByVersion.ContainsKey(LVersionName) then
+        begin
+          LLocationsByVersion.Add(LVersionName, TStringList.Create);
+          LLocationsByVersion[LVersionName].Sorted := True;
+          LLocationsByVersion[LVersionName].Duplicates := dupIgnore;
+        end;
+        LLocationsByVersion[LVersionName].Add(LLocationName);
+      end;
+    end;
+
+    for LPair in LLocationsByVersion do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      LSectionIdx := High(Result);
+      Result[LSectionIdx].Title := LPair.Key;
+      SetLength(Result[LSectionIdx].Locations, LPair.Value.Count);
+      for K := 0 to LPair.Value.Count - 1 do
+        Result[LSectionIdx].Locations[K] := LPair.Value[K];
+    end;
+
+    TArray.Sort<TEncounterSection>(Result, TComparer<TEncounterSection>.Construct(
+      function(const Left, Right: TEncounterSection): Integer
+      begin
+        Result := CompareText(Left.Title, Right.Title);
+      end));
+  finally
+    for LPair in LLocationsByVersion do
+      LPair.Value.Free;
+    LLocationsByVersion.Free;
+    LRoot.Free;
+  end;
 end;
 
 function TPokemonController.GetTypeEffectiveness(const ATypeNames

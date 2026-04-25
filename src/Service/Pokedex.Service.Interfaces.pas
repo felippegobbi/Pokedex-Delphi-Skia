@@ -17,6 +17,7 @@ type
     function GetSpeciesJSON(const AUrl: string): string;
     function GetEvolutionChainJSON(const AUrl: string): string;
     function GetTypeJSON(const AUrl: string): string;
+    function GetEncountersJSON(const AIdOrName: string): string;
   end;
 
 implementation
