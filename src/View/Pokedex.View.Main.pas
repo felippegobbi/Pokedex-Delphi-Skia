@@ -84,6 +84,7 @@ type
     FActiveMovePoolRequest: Int64;
     FActiveEncounterRequest: Int64;
     FActiveFlavorRequest: Int64;
+    FActiveAbilityRequest: Int64;
     FCurrentFlavorTexts: TArray<string>;
     FCurrentFlavorTranslated: TArray<string>;
     FFlavorNeedsTranslation: Boolean;
@@ -124,6 +125,7 @@ type
     procedure StatsPanelMovesTabRequested(Sender: TObject);
     procedure StatsPanelLocationsTabRequested(Sender: TObject);
     procedure StatsPanelFlavorOptionSelected(Sender: TObject; AIndex: Integer);
+    procedure StatsPanelAbilitySelected(Sender: TObject; AIndex: Integer);
     procedure StatsPanelInteracted(Sender: TObject);
     procedure SetLoading(const AValue: Boolean);
     procedure LoadingTimerTick(Sender: TObject);
@@ -430,6 +432,7 @@ begin
   FStatsPanel.OnMovesTabRequested := StatsPanelMovesTabRequested;
   FStatsPanel.OnLocationsTabRequested := StatsPanelLocationsTabRequested;
   FStatsPanel.OnFlavorOptionSelected := StatsPanelFlavorOptionSelected;
+  FStatsPanel.OnAbilitySelected := StatsPanelAbilitySelected;
 end;
 
 procedure TPokedexView.SetupEvolutionPanel;
@@ -552,6 +555,7 @@ begin
   Inc(FActiveMovePoolRequest);
   Inc(FActiveEncounterRequest);
   Inc(FActiveFlavorRequest);
+  Inc(FActiveAbilityRequest);
   LSearchRequestId := FActiveSearchRequest;
   FSearchEdit.Enabled := False;
   btnNext.Visible := False;
@@ -568,7 +572,7 @@ begin
       LStream: TMemoryStream;
       LChain: TArray<TEvolutionNode>;
       LTypeEffects: TArray<TTypeEffect>;
-      LAbilityName, LAbilityDesc, LAbilityNote, LErrorMsg, LSpriteUrl: string;
+      LAbilityName, LAbilityNote, LErrorMsg, LSpriteUrl: string;
       LDominantColor: TColor;
       LTypeNames, LTypeList, LFlavorLabels, LFlavorTexts: TArray<string>;
       I: Integer;
@@ -593,7 +597,6 @@ begin
       SetLength(LFlavorLabels, 0);
       SetLength(LFlavorTexts, 0);
       LAbilityName := '';
-      LAbilityDesc := '';
       LAbilityNote := '';
       var
         LFlavorText: string := '';
@@ -685,7 +688,6 @@ begin
         if Length(LPokemon.Abilities) > 0 then
         begin
           LAbilityName := LPokemon.Abilities[0].Ability.Name;
-          LAbilityDesc := FController.GetAbilityDescription(LAbilityName, LPokeAPILang);
           LAbilityNote := TPokemonController.GetDefensiveAbilityNote(LAbilityName);
         end;
         if Length(LTypeNames) > 0 then
@@ -701,13 +703,6 @@ begin
             if not LFlavorText.IsEmpty then
               LFlavorEntryLang := 'en';
           end;
-        end;
-
-        if (LPokeAPILang = 'en') and (LSystemLang <> 'en') then
-        begin
-          if not LAbilityDesc.IsEmpty then
-            LAbilityDesc := TPokemonController.Translate(LAbilityDesc,
-              LSystemLang);
         end;
 
         if Assigned(LPokemon.SpeciesData) then
@@ -897,7 +892,6 @@ begin
             FStatsPanel.LoadEffects(LTypeEffects, LAbilityNote);
             FStatsPanel.ResetMovePool;
             FStatsPanel.ResetLocations;
-            FStatsPanel.LoadAbilityDescription(LAbilityDesc);
           finally
             FreeAndNil(LPokemon);
           end;
@@ -1519,6 +1513,39 @@ begin
     end).Start;
 end;
 
+procedure TPokedexView.StatsPanelAbilitySelected(Sender: TObject;
+  AIndex: Integer);
+var
+  LAbilityRequestId: Int64;
+  LUrl, LPokeAPILang, LSystemLang: string;
+begin
+  HideHistoryPanel;
+  Inc(FActiveAbilityRequest);
+  LAbilityRequestId := FActiveAbilityRequest;
+  LUrl := FStatsPanel.AbilityUrl[AIndex];
+  LPokeAPILang := TPokemonController.GetPreferredLanguage;
+  LSystemLang := TPokemonController.GetSystemLanguage;
+  if LUrl.IsEmpty then
+    Exit;
+  FStatsPanel.LoadAbilityDescription('Carregando...');
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      LDesc: string;
+    begin
+      LDesc := FController.GetAbilityDescriptionByUrl(LUrl, LPokeAPILang);
+      if (LPokeAPILang = 'en') and (LSystemLang <> 'en') and not LDesc.IsEmpty then
+        LDesc := TPokemonController.Translate(LDesc, LSystemLang);
+      TThread.Synchronize(nil, TThreadProcedure(
+        procedure
+        begin
+          if LAbilityRequestId <> FActiveAbilityRequest then
+            Exit;
+          FStatsPanel.LoadAbilityDescription(LDesc);
+        end));
+    end).Start;
+end;
+
 procedure TPokedexView.StatsPanelInteracted(Sender: TObject);
 begin
   HideHistoryPanel;
@@ -1564,16 +1591,33 @@ end;
 procedure TPokedexView.UpdatePokemonStats(APokemon: TPokemon);
 var
   LStats: TArray<TPokemonStat>;
-  LAbility, LGenderRatio, LEggGroups, LHatchCounter, LEggGroupName: string;
-  I: Integer;
+  LGenderRatio, LEggGroups, LHatchCounter, LEggGroupName: string;
+  LGeneration, LHabitat, LPastTypes, LPastEntry: string;
+  LAbilityNames: TArray<string>;
+  LAbilityIsHidden: TArray<Boolean>;
+  LAbilityUrls: TArray<string>;
+  I, J: Integer;
   LFemaleRate, LMaleRate: Double;
+  LPastTypeNames: string;
 begin
-  if Length(APokemon.Abilities) > 0 then
-    LAbility := UpperCase(APokemon.Abilities[0].Ability.Name)
-  else
-    LAbility := '';
   FStatsPanel.LoadInfo(TPokemonController.FormatMetric(APokemon.Weight, 'kg'),
-    TPokemonController.FormatMetric(APokemon.Height, 'm'), LAbility);
+    TPokemonController.FormatMetric(APokemon.Height, 'm'));
+  FStatsPanel.LoadAbilityDescription('');
+
+  SetLength(LAbilityNames, Length(APokemon.Abilities));
+  SetLength(LAbilityIsHidden, Length(APokemon.Abilities));
+  SetLength(LAbilityUrls, Length(APokemon.Abilities));
+  for I := 0 to High(APokemon.Abilities) do
+  begin
+    LAbilityNames[I] := TPokemonController.CapitalizeDisplayName(
+      APokemon.Abilities[I].Ability.Name);
+    LAbilityIsHidden[I] := APokemon.Abilities[I].IsHidden;
+    LAbilityUrls[I] := APokemon.Abilities[I].Ability.Url;
+  end;
+  FStatsPanel.LoadAbilities(LAbilityNames, LAbilityIsHidden, LAbilityUrls, 0);
+  if Length(LAbilityUrls) > 0 then
+    StatsPanelAbilitySelected(FStatsPanel, 0);
+
   SetLength(LStats, Length(APokemon.Stats));
   for I := 0 to High(APokemon.Stats) do
   begin
@@ -1585,6 +1629,10 @@ begin
   LGenderRatio := '';
   LEggGroups := '';
   LHatchCounter := '';
+  LGeneration := '';
+  LHabitat := '';
+  LPastTypes := '';
+
   if Assigned(APokemon.SpeciesData) then
   begin
     if APokemon.SpeciesData.GenderRate < 0 then
@@ -1611,8 +1659,35 @@ begin
       LHatchCounter := Format('%d ciclos', [APokemon.SpeciesData.HatchCounter])
     else
       LHatchCounter := 'Indisponível';
+
+    if Assigned(APokemon.SpeciesData.Generation) then
+      LGeneration := TPokemonController.FormatGeneration(
+        APokemon.SpeciesData.Generation.Name);
+
+    if Assigned(APokemon.SpeciesData.Habitat) then
+      LHabitat := TPokemonController.CapitalizeDisplayName(
+        APokemon.SpeciesData.Habitat.Name);
   end;
+
+  for I := 0 to High(APokemon.PastTypes) do
+  begin
+    LPastTypeNames := '';
+    for J := 0 to High(APokemon.PastTypes[I].Types) do
+    begin
+      if LPastTypeNames <> '' then
+        LPastTypeNames := LPastTypeNames + '/';
+      LPastTypeNames := LPastTypeNames + TPokemonController.CapitalizeDisplayName(
+        APokemon.PastTypes[I].Types[J].&Type.Name);
+    end;
+    LPastEntry := TPokemonController.FormatGeneration(
+      APokemon.PastTypes[I].Generation.Name) + ': ' + LPastTypeNames;
+    if LPastTypes <> '' then
+      LPastTypes := LPastTypes + '  ·  ';
+    LPastTypes := LPastTypes + LPastEntry;
+  end;
+
   FStatsPanel.LoadBreeding(LGenderRatio, LEggGroups, LHatchCounter);
+  FStatsPanel.LoadSpeciesExtra(LGeneration, LHabitat, LPastTypes);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);

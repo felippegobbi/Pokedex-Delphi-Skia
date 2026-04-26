@@ -24,6 +24,8 @@ type
 
   TFlavorOptionSelectedEvent = procedure(Sender: TObject;
     AIndex: Integer) of object;
+  TAbilitySelectedEvent = procedure(Sender: TObject;
+    AIndex: Integer) of object;
 
   TStatsTab = (stStats, stMoves, stLocations);
   TMoveTab = (mtLevelUp, mtTM, mtEgg);
@@ -34,7 +36,6 @@ type
     FBarColor: TAlphaColor;
     FWeight: string;
     FHeight: string;
-    FAbility: string;
     FGenderRatio: string;
     FEggGroups: string;
     FHatchCounter: string;
@@ -47,7 +48,15 @@ type
     FFlavorDropdownOpen: Boolean;
     FFlavorScrollOffset: Integer;
     FSelectedFlavorIdx: Integer;
+    FAbilityNames: TArray<string>;
+    FAbilityIsHidden: TArray<Boolean>;
+    FAbilityUrls: TArray<string>;
+    FSelectedAbilityIdx: Integer;
+    FAbilityChipRects: TArray<TRectF>;
     FAbilityDescription: string;
+    FGeneration: string;
+    FHabitat: string;
+    FPastTypes: string;
     FDefensiveEffects: TArray<TTypeEffect>;
     FMovePool: TArray<TMovePoolSection>;
     FEncounterSections: TArray<TEncounterSection>;
@@ -69,6 +78,7 @@ type
     FOnLocationsTabRequested: TNotifyEvent;
     FOnInteract: TNotifyEvent;
     FOnFlavorOptionSelected: TFlavorOptionSelectedEvent;
+    FOnAbilitySelected: TAbilitySelectedEvent;
     procedure DrawStats(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
     procedure HandleMouseDown(Sender: TObject; Button: TMouseButton;
@@ -92,17 +102,23 @@ type
       const AIndex: Integer): TAlphaColor;
     function SplitLevelMove(const AMoveText: string; out ALevelLabel,
       AMoveName: string): Boolean;
+    function GetAbilityUrl(AIndex: Integer): string;
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadStats(const AStats: TArray<TPokemonStat>);
-    procedure LoadInfo(const AWeight, AHeight, AAbility: string);
+    procedure LoadInfo(const AWeight, AHeight: string);
     procedure LoadBreeding(const AGenderRatio, AEggGroups,
       AHatchCounter: string);
     procedure LoadDescription(const AText: string);
     procedure LoadFlavorOptions(const ALabels, ATexts: TArray<string>;
       const ASelectedText: string);
     procedure SetFlavorDescription(const AText: string);
+    procedure LoadAbilities(const ANames: TArray<string>;
+      const AIsHidden: TArray<Boolean>; const AUrls: TArray<string>;
+      ASelectedIdx: Integer);
     procedure LoadAbilityDescription(const AText: string);
+    procedure LoadSpeciesExtra(const AGeneration, AHabitat,
+      APastTypes: string);
     procedure LoadEffects(const ADefensiveEffects: TArray<TTypeEffect>;
       const ADefenseNote: string = '');
     procedure ResetMovePool;
@@ -121,6 +137,9 @@ type
     property OnInteract: TNotifyEvent read FOnInteract write FOnInteract;
     property OnFlavorOptionSelected: TFlavorOptionSelectedEvent
       read FOnFlavorOptionSelected write FOnFlavorOptionSelected;
+    property OnAbilitySelected: TAbilitySelectedEvent
+      read FOnAbilitySelected write FOnAbilitySelected;
+    property AbilityUrl[AIndex: Integer]: string read GetAbilityUrl;
   end;
 
 implementation
@@ -161,7 +180,15 @@ begin
   FFlavorDropdownOpen := False;
   FFlavorScrollOffset := 0;
   FSelectedFlavorIdx := -1;
+  SetLength(FAbilityNames, 0);
+  SetLength(FAbilityIsHidden, 0);
+  SetLength(FAbilityUrls, 0);
+  SetLength(FAbilityChipRects, 0);
+  FSelectedAbilityIdx := 0;
   FAbilityDescription := '';
+  FGeneration := '';
+  FHabitat := '';
+  FPastTypes := '';
   FDefenseNote := '';
   FActiveTab := stStats;
   FActiveMoveTab := mtLevelUp;
@@ -193,11 +220,10 @@ begin
   Redraw;
 end;
 
-procedure TStatsPanel.LoadInfo(const AWeight, AHeight, AAbility: string);
+procedure TStatsPanel.LoadInfo(const AWeight, AHeight: string);
 begin
   FWeight := AWeight;
   FHeight := AHeight;
-  FAbility := AAbility;
   Redraw;
 end;
 
@@ -251,9 +277,30 @@ begin
   Redraw;
 end;
 
+procedure TStatsPanel.LoadAbilities(const ANames: TArray<string>;
+  const AIsHidden: TArray<Boolean>; const AUrls: TArray<string>;
+  ASelectedIdx: Integer);
+begin
+  FAbilityNames := ANames;
+  FAbilityIsHidden := AIsHidden;
+  FAbilityUrls := AUrls;
+  FSelectedAbilityIdx := ASelectedIdx;
+  SetLength(FAbilityChipRects, Length(ANames));
+  Redraw;
+end;
+
 procedure TStatsPanel.LoadAbilityDescription(const AText: string);
 begin
   FAbilityDescription := AText;
+  Redraw;
+end;
+
+procedure TStatsPanel.LoadSpeciesExtra(const AGeneration, AHabitat,
+  APastTypes: string);
+begin
+  FGeneration := AGeneration;
+  FHabitat := AHabitat;
+  FPastTypes := APastTypes;
   Redraw;
 end;
 
@@ -426,6 +473,14 @@ begin
   Result := ALevelLabel.StartsWith('LV.');
 end;
 
+function TStatsPanel.GetAbilityUrl(AIndex: Integer): string;
+begin
+  if (AIndex >= 0) and (AIndex <= High(FAbilityUrls)) then
+    Result := FAbilityUrls[AIndex]
+  else
+    Result := '';
+end;
+
 procedure TStatsPanel.DrawTabs(const ACanvas: ISkCanvas; const APanelRect: TRectF);
 var
   LPaint: ISkPaint;
@@ -556,8 +611,10 @@ var
   LBadgeLabels: TArray<string>;
   LBadgeWidths: TArray<Single>;
   LBadgeColors: TArray<TAlphaColor>;
+  LChipWidths: TArray<Single>;
   LP: ISkParagraph;
   LSectionTitle: string;
+  LChipIdx: Integer;
 begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
@@ -626,7 +683,7 @@ begin
     TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
-  LP := MakeParagraph('HABILIDADE', STATS_FONT_SIZE, $88FFFFFF, True, False,
+  LP := MakeParagraph('GERAÇÃO', STATS_FONT_SIZE, $88FFFFFF, True, False,
     TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
@@ -640,32 +697,136 @@ begin
     TSkTextAlign.Center, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
-  LP := MakeParagraph(FAbility, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+  LP := MakeParagraph(FGeneration, STATS_FONT_SIZE, $FFFFFFFF, True, False,
     TSkTextAlign.Right, 1);
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
 
   LY := LY + 20;
+
+  if Length(FAbilityNames) > 0 then
+  begin
+    LP := MakeParagraph('HABILIDADES', STATS_FONT_SIZE, $88FFFFFF, True, False,
+      TSkTextAlign.Center, 1);
+    LP.Layout(APanelRect.Width);
+    LP.Paint(ACanvas, APanelRect.Left, LY);
+    LY := LY + LP.Height + 6;
+
+    // First pass: measure chip widths
+    SetLength(LChipWidths, Length(FAbilityNames));
+    for I := 0 to High(FAbilityNames) do
+    begin
+      var LLabel: string := UpperCase(FAbilityNames[I]);
+      if (I <= High(FAbilityIsHidden)) and FAbilityIsHidden[I] then
+        LLabel := LLabel + ' [H]';
+      LP := MakeParagraph(LLabel, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+        TSkTextAlign.Left, 1);
+      LP.Layout(220);
+      LChipWidths[I] := LP.LongestLine + 14;
+    end;
+
+    // Second pass: draw rows centered
+    LChipIdx := 0;
+    while LChipIdx <= High(FAbilityNames) do
+    begin
+      LRowTotalW := 0;
+      LRowCount := 0;
+      J := LChipIdx;
+      while J <= High(FAbilityNames) do
+      begin
+        LThisW := LChipWidths[J];
+        if LRowCount > 0 then
+          LThisW := LThisW + 6;
+        if (LRowTotalW + LThisW > APanelRect.Width) and (LRowCount > 0) then
+          Break;
+        LRowTotalW := LRowTotalW + LThisW;
+        Inc(LRowCount);
+        Inc(J);
+      end;
+      if LRowCount = 0 then
+        LRowCount := 1;
+      LRowEnd := LChipIdx + LRowCount - 1;
+
+      LX := APanelRect.Left + (APanelRect.Width - LRowTotalW) / 2;
+      if LX < APanelRect.Left then
+        LX := APanelRect.Left;
+
+      for J := LChipIdx to LRowEnd do
+      begin
+        if J > LChipIdx then
+          LX := LX + 6;
+        LBadgeW := LChipWidths[J];
+        if J <= High(FAbilityChipRects) then
+          FAbilityChipRects[J] := TRectF.Create(LX, LY, LX + LBadgeW, LY + 20);
+
+        var LLabel: string := UpperCase(FAbilityNames[J]);
+        if (J <= High(FAbilityIsHidden)) and FAbilityIsHidden[J] then
+          LLabel := LLabel + ' [H]';
+        LP := MakeParagraph(LLabel, STATS_FONT_SIZE, $FFFFFFFF, True, False,
+          TSkTextAlign.Left, 1);
+        LP.Layout(Max(20.0, LBadgeW));
+
+        LPaint.Style := TSkPaintStyle.Fill;
+        if J = FSelectedAbilityIdx then
+          LPaint.Color := FBarColor and $40FFFFFF
+        else
+          LPaint.Color := $18FFFFFF;
+        ACanvas.DrawRoundRect(FAbilityChipRects[J], 5, 5, LPaint);
+
+        LPaint.Style := TSkPaintStyle.Stroke;
+        LPaint.StrokeWidth := 1;
+        if J = FSelectedAbilityIdx then
+          LPaint.Color := FBarColor
+        else
+          LPaint.Color := $33FFFFFF;
+        ACanvas.DrawRoundRect(FAbilityChipRects[J], 5, 5, LPaint);
+
+        LBadgeMidY := (FAbilityChipRects[J].Top + FAbilityChipRects[J].Bottom) / 2;
+        LP.Paint(ACanvas, LX + 7, LBadgeMidY - LP.Height / 2);
+        LX := LX + LBadgeW;
+      end;
+
+      LChipIdx := LRowEnd + 1;
+      LY := LY + 26;
+    end;
+  end;
+
   if FAbilityDescription <> '' then
   begin
     LP := MakeParagraph(FAbilityDescription, STATS_FONT_SIZE, $99FFFFFF, True,
       False, TSkTextAlign.Center, 3);
     LP.Layout(APanelRect.Width);
     LP.Paint(ACanvas, APanelRect.Left, LY);
-    LY := LY + LP.Height + 10;
+    LY := LY + LP.Height + 6;
+  end;
 
-    if (FDescription <> '') and
-      not ((FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '')) then
-    begin
-      LDividerRect := TRectF.Create(APanelRect.Left + 16, LY,
-        APanelRect.Right - 16, LY + 1);
-      LPaint.Style := TSkPaintStyle.Stroke;
-      LPaint.StrokeWidth := 1;
-      LPaint.Color := $22FFFFFF;
-      ACanvas.DrawLine(TPointF.Create(LDividerRect.Left, LY),
-        TPointF.Create(LDividerRect.Right, LY), LPaint);
-      LY := LY + 10;
-    end;
+  if FHabitat <> '' then
+  begin
+    LP := MakeParagraph('HABITAT: ' + FHabitat, STATS_FONT_SIZE, $66FFFFFF,
+      True, False, TSkTextAlign.Center, 1);
+    LP.Layout(APanelRect.Width);
+    LP.Paint(ACanvas, APanelRect.Left, LY);
+    LY := LY + LP.Height + 4;
+  end;
+
+  if FPastTypes <> '' then
+  begin
+    LP := MakeParagraph(FPastTypes, STATS_FONT_SIZE, $55FFFFFF,
+      True, False, TSkTextAlign.Center, 1);
+    LP.Layout(APanelRect.Width);
+    LP.Paint(ACanvas, APanelRect.Left, LY);
+    LY := LY + LP.Height + 4;
+  end;
+
+  if (FDescription <> '') and
+    not ((FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '')) then
+  begin
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 1;
+    LPaint.Color := $22FFFFFF;
+    ACanvas.DrawLine(TPointF.Create(APanelRect.Left + 16, LY),
+      TPointF.Create(APanelRect.Right - 16, LY), LPaint);
+    LY := LY + 10;
   end;
 
   if (FGenderRatio <> '') or (FEggGroups <> '') or (FHatchCounter <> '') then
@@ -1433,6 +1594,17 @@ begin
         Exit;
       end;
   end;
+
+  if (FActiveTab = stStats) and (Length(FAbilityNames) > 1) then
+    for I := 0 to High(FAbilityChipRects) do
+      if FAbilityChipRects[I].Contains(LPoint) and (I <> FSelectedAbilityIdx) then
+      begin
+        FSelectedAbilityIdx := I;
+        Redraw;
+        if Assigned(FOnAbilitySelected) then
+          FOnAbilitySelected(Self, I);
+        Exit;
+      end;
 
   if (FActiveTab = stStats) and (Length(FFlavorLabels) > 1) then
   begin
