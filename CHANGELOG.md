@@ -13,6 +13,35 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - `Sprint 6` → `feat(5.6.0): Sprint 6 - Offensive Chart & Lazy Movepool`
 - `Sprint 7` → `feat(5.7.0): Sprint 7 - Breeding, Flavor Versions & Locations`
 
+## V6 Sprint Map / Mapa de Sprints V6
+
+- `Sprint 1` → `feat(6.0.0): Sprint 1 - Abilities & Species Depth`
+
+## [6.0.0] - 2026-04-25
+
+### Added / Adicionado
+
+- **All abilities with hidden flag**: The stats tab now shows every ability slot for the current Pokemon as interactive chips. Hidden abilities are visually tagged with `[H]`. Clicking a chip loads its description on demand from the API.
+- **Todas as habilidades com flag de oculta**: A aba de stats agora exibe cada slot de habilidade do Pokemon atual como chips interativos. Habilidades ocultas recebem a tag `[H]`. Clicar em um chip carrega a descricao sob demanda da API.
+- **Generation and Habitat in stats panel**: The species generation (`Gen I`, `Gen II`, etc.) and habitat now appear in the main stats tab alongside weight and height.
+- **Geracao e habitat no painel de stats**: A geracao da especie (`Gen I`, `Gen II`, etc.) e o habitat agora aparecem na aba principal de stats junto a peso e altura.
+- **Past types display**: When a Pokemon had different typing in older generations, those historical types are shown as a subtle note below the abilities section.
+- **Tipos historicos**: Quando um Pokemon tinha tipagem diferente em geracoes antigas, esses tipos historicos sao exibidos como nota abaixo da secao de habilidades.
+
+### Changed / Alterado
+
+- **Ability description lazy-loaded on click**: Instead of fetching the first ability description during the initial search, descriptions are now loaded only when the user taps a specific ability chip, reducing search latency.
+- **Descricao de habilidade sob demanda**: Em vez de buscar a descricao da primeira habilidade durante a busca inicial, as descricoes agora sao carregadas somente ao tocar em um chip de habilidade especifico, reduzindo a latencia da busca.
+
+### Technical / Tecnico
+
+- **Model**: `TAbility` gains `is_hidden` and `slot` fields; `TPokemonSpecies` gains `generation` and `habitat`; new `TPastTypeEntry` class maps `past_types` array from `/pokemon`.
+- **Modelo**: `TAbility` ganha campos `is_hidden` e `slot`; `TPokemonSpecies` ganha `generation` e `habitat`; nova classe `TPastTypeEntry` mapeia o array `past_types` de `/pokemon`.
+- **Controller**: `GetAbilityDescriptionByUrl(AUrl, ALang)` added for URL-based lazy fetch; `FormatGeneration(AName)` converts `generation-i` to `Gen I`.
+- **Controlador**: `GetAbilityDescriptionByUrl(AUrl, ALang)` adicionado para busca preguicosa por URL; `FormatGeneration(AName)` converte `generation-i` para `Gen I`.
+- **View**: `TStatsPanel.LoadAbilities` and `LoadSpeciesExtra` added; `OnAbilitySelected` event fires the selected chip index; `FActiveAbilityRequest` counter guards race conditions in `TPokedexView`.
+- **View**: `TStatsPanel.LoadAbilities` e `LoadSpeciesExtra` adicionados; evento `OnAbilitySelected` dispara o indice do chip selecionado; contador `FActiveAbilityRequest` protege contra race conditions em `TPokedexView`.
+
 ## [5.7.0] - 2026-04-23
 
 ### Added / Adicionado

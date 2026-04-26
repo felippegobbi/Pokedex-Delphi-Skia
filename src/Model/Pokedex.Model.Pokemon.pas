@@ -23,8 +23,14 @@ type
   private
     [JSONName('ability')]
     FAbility: TApiResource;
+    [JSONName('is_hidden')]
+    FIsHidden: Boolean;
+    [JSONName('slot')]
+    FSlot: Integer;
   public
     property Ability: TApiResource read FAbility write FAbility;
+    property IsHidden: Boolean read FIsHidden write FIsHidden;
+    property Slot: Integer read FSlot write FSlot;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -85,6 +91,18 @@ type
     property Version: TApiResource read FVersion write FVersion;
   end;
 
+  TPastTypeEntry = class
+  private
+    [JSONName('generation')]
+    FGeneration: TApiResource;
+    [JSONName('types')]
+    FTypes: TArray<TPokemonType>;
+  public
+    destructor Destroy; override;
+    property Generation: TApiResource read FGeneration write FGeneration;
+    property Types: TArray<TPokemonType> read FTypes write FTypes;
+  end;
+
   TPokemonSpecies = class
   private
     [JSONName('flavor_text_entries')]
@@ -99,6 +117,10 @@ type
     FHatchCounter: Integer;
     [JSONName('egg_groups')]
     FEggGroups: TArray<TApiResource>;
+    [JSONName('generation')]
+    FGeneration: TApiResource;
+    [JSONName('habitat')]
+    FHabitat: TApiResource;
   public
     destructor Destroy; override;
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
@@ -109,6 +131,8 @@ type
     property GenderRate: Integer read FGenderRate write FGenderRate;
     property HatchCounter: Integer read FHatchCounter write FHatchCounter;
     property EggGroups: TArray<TApiResource> read FEggGroups write FEggGroups;
+    property Generation: TApiResource read FGeneration write FGeneration;
+    property Habitat: TApiResource read FHabitat write FHabitat;
 
     function GetDescription(const ALang: string = 'en'): string;
   end;
@@ -144,6 +168,8 @@ type
     FSpecies: TApiResource;
     [JSONName('stats')]
     FStats: TArray<TStatEntry>;
+    [JSONName('past_types')]
+    FPastTypes: TArray<TPastTypeEntry>;
     FSpeciesData: TPokemonSpecies;
     FMovePool: TArray<TMovePoolSection>;
     function GetSpriteUrl: string;
@@ -159,6 +185,7 @@ type
     property Species: TApiResource read FSpecies write FSpecies;
     property SpeciesData: TPokemonSpecies read FSpeciesData write FSpeciesData;
     property Stats: TArray<TStatEntry> read FStats write FStats;
+    property PastTypes: TArray<TPastTypeEntry> read FPastTypes write FPastTypes;
     property MovePool: TArray<TMovePoolSection> read FMovePool write FMovePool;
     property SpriteUrl: string read GetSpriteUrl;
     function ShinySpriteUrl: string;
@@ -233,6 +260,7 @@ destructor TPokemon.Destroy;
 var
   I: Integer;
   LStat: TStatEntry;
+  LPastType: TPastTypeEntry;
 begin
   FreeAndNil(FSprites);
   FreeAndNil(FSpecies);
@@ -246,6 +274,9 @@ begin
 
   for LStat in FStats do
     LStat.Free;
+
+  for LPastType in FPastTypes do
+    LPastType.Free;
 
   inherited;
 end;
@@ -298,6 +329,17 @@ begin
   inherited;
 end;
 
+{ TPastTypeEntry }
+destructor TPastTypeEntry.Destroy;
+var
+  LType: TPokemonType;
+begin
+  FreeAndNil(FGeneration);
+  for LType in FTypes do
+    LType.Free;
+  inherited;
+end;
+
 { TPokemonSpecies }
 destructor TPokemonSpecies.Destroy;
 var
@@ -310,6 +352,8 @@ begin
     LEggGroup.Free;
   FreeAndNil(FEvolutionChain);
   FreeAndNil(FColor);
+  FreeAndNil(FGeneration);
+  FreeAndNil(FHabitat);
   inherited;
 end;
 

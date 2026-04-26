@@ -42,10 +42,12 @@ type
       const AAbilityName: string = '')
       : TArray<TTypeEffect>;
     function GetAbilityDescription(const AName, ALang: string): string;
+    function GetAbilityDescriptionByUrl(const AUrl, ALang: string): string;
     class function FilterEvolutionChain(const AChain: TArray<TEvolutionNode>;
       const AActivePokemonId: Integer): TArray<TEvolutionNode>;
     class function FormatMetric(const AValue: Integer;
       const AUnit: string): string;
+    class function FormatGeneration(const AName: string): string;
     class function GetCryUrl(const AId: Integer): string;
     class function GetColorByString(const AColorName: string): TColor;
     class function GetTypeColor(const ATypeName: string): TColor;
@@ -1055,6 +1057,71 @@ begin
   except
     Result := '';
   end;
+end;
+
+function TPokemonController.GetAbilityDescriptionByUrl(const AUrl,
+  ALang: string): string;
+var
+  LJson: string;
+  LRoot: TJSONValue;
+  LObj: TJSONObject;
+  LArr: TJSONArray;
+  LEntry, LLangObj: TJSONValue;
+  LTargetLang, LBackupEn: string;
+begin
+  Result := '';
+  if AUrl.IsEmpty then
+    Exit;
+  if ALang.IsEmpty then
+    LTargetLang := 'en'
+  else
+    LTargetLang := ALang;
+  try
+    LJson := FService.GetTypeJSON(AUrl);
+    LRoot := TJSONObject.ParseJSONValue(LJson);
+    if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
+    begin
+      if Assigned(LRoot) then
+        LRoot.Free;
+      Exit;
+    end;
+    LObj := TJSONObject(LRoot);
+    try
+      LArr := TJSONArray(LObj.GetValue('flavor_text_entries'));
+      if not Assigned(LArr) then
+        Exit;
+      LBackupEn := '';
+      for LEntry in LArr do
+        if LEntry is TJSONObject then
+        begin
+          LLangObj := TJSONObject(LEntry).GetValue('language');
+          if not(Assigned(LLangObj) and (LLangObj is TJSONObject)) then
+            Continue;
+          if TJSONObject(LLangObj).GetValue<string>('name') = LTargetLang then
+            Result := TJSONObject(LEntry).GetValue<string>('flavor_text')
+          else if TJSONObject(LLangObj).GetValue<string>('name') = 'en' then
+            LBackupEn := TJSONObject(LEntry).GetValue<string>('flavor_text');
+        end;
+      if Result.IsEmpty then
+        Result := LBackupEn;
+      Result := Result.Replace(#10, ' ').Replace(#12, ' ').Replace(#13, ' ');
+    finally
+      LObj.Free;
+    end;
+  except
+    Result := '';
+  end;
+end;
+
+class function TPokemonController.FormatGeneration(const AName: string): string;
+var
+  LParts: TArray<string>;
+begin
+  LParts := AName.Split(['-']);
+  if Length(LParts) >= 2 then
+    Result := 'Gen ' + UpperCase(LParts[1])
+  else
+    Result := CapitalizeDisplayName(AName);
 end;
 
 class function TPokemonController.GetSystemLanguage: string;
