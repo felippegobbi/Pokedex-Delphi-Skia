@@ -34,6 +34,7 @@ type
     FEvoPageTotal: Integer;
     FArrowLeftRect: TRectF;
     FArrowRightRect: TRectF;
+    FHoveredArrow: Integer; // 0=none, 1=left, 2=right
     procedure ComputePageIdxs;
     procedure DrawEvolution(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
@@ -41,6 +42,8 @@ type
       const AGen: Integer);
     procedure HandleMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure HandleMouseMove(Sender: TObject; Shift: TShiftState;
+      X, Y: Integer);
     function FormatTrigger(const ATrigger: TEvolutionTrigger): string;
     function FormatItemName(const AName: string): string;
     function CapitalizeName(const AName: string): string;
@@ -88,6 +91,7 @@ begin
   SetLength(FNodeRects, 0);
   OnDraw := DrawEvolution;
   OnMouseDown := HandleMouseDown;
+  OnMouseMove := HandleMouseMove;
   Cursor := crHandPoint;
 end;
 
@@ -429,6 +433,30 @@ begin
     end;
 end;
 
+procedure TEvolutionPanel.HandleMouseMove(Sender: TObject; Shift: TShiftState;
+  X, Y: Integer);
+var
+  LPoint: TPointF;
+  LNewHovered: Integer;
+begin
+  LNewHovered := 0;
+  LPoint := TPointF.Create(X, Y);
+
+  if FEvoPageTotal > 1 then
+  begin
+    if FArrowLeftRect.Contains(LPoint) and (FEvoPage > 0) then
+      LNewHovered := 1
+    else if FArrowRightRect.Contains(LPoint) and (FEvoPage < FEvoPageTotal - 1) then
+      LNewHovered := 2;
+  end;
+
+  if LNewHovered <> FHoveredArrow then
+  begin
+    FHoveredArrow := LNewHovered;
+    Redraw;
+  end;
+end;
+
 procedure TEvolutionPanel.DrawEvolution(ASender: TObject;
 const ACanvas: ISkCanvas; const ADest: TRectF; const AOpacity: Single);
 var
@@ -705,10 +733,13 @@ begin
 
     LPaint.Style := TSkPaintStyle.Stroke;
     LPaint.StrokeWidth := 2.5;
-    LPaint.Color := $AAFFFFFF;
     // Left chevron "<" — hidden on first page
     if FEvoPage > 0 then
     begin
+      if FHoveredArrow = 1 then
+        LPaint.Color := $DDFFFFFF
+      else
+        LPaint.Color := $AAFFFFFF;
       ACanvas.DrawLine(TPointF.Create(FArrowLeftRect.Right - 4,
         FArrowLeftRect.Top + 4), TPointF.Create(FArrowLeftRect.Left + 5,
         LArrowMidY), LPaint);
@@ -719,6 +750,10 @@ begin
     // Right chevron ">" — hidden on last page
     if FEvoPage < FEvoPageTotal - 1 then
     begin
+      if FHoveredArrow = 2 then
+        LPaint.Color := $DDFFFFFF
+      else
+        LPaint.Color := $AAFFFFFF;
       ACanvas.DrawLine(TPointF.Create(FArrowRightRect.Left + 4,
         FArrowRightRect.Top + 4), TPointF.Create(FArrowRightRect.Right - 5,
         LArrowMidY), LPaint);
