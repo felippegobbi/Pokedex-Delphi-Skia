@@ -1,4 +1,4 @@
-unit Pokedex.View.EvolutionPanel;
+﻿unit Pokedex.View.EvolutionPanel;
 
 interface
 
@@ -21,14 +21,20 @@ type
 
   TEvolutionPanel = class(TSkPaintBox)
   private
-    FNodes: TArray<TEvolutionNode>;
-    FImages: TArray<ISkImage>;
-    FImageStates: TArray<TEvolutionImageState>;
+    FFullNodes: TArray<TEvolutionNode>;
+    FFullImages: TArray<ISkImage>;
+    FFullStates: TArray<TEvolutionImageState>;
+    FPageIdxs: TArray<Integer>;
     FNodeRects: TArray<TRectF>;
     FThemeColor: TAlphaColor;
     FFontFamily: string;
     FGeneration: Integer;
     FOnNodeClick: TProc<Integer>;
+    FEvoPage: Integer;
+    FEvoPageTotal: Integer;
+    FArrowLeftRect: TRectF;
+    FArrowRightRect: TRectF;
+    procedure ComputePageIdxs;
     procedure DrawEvolution(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
     procedure LoadSpriteAsync(const AIndex: Integer; const AUrl: string;
@@ -53,12 +59,12 @@ implementation
 
 const
   PANEL_PAD = 8;
-  // Fan layout: evolutions in vertical columns on each side of root
-  FAN_SPRITE_INSET = 75.0; // sprite column from panel edge
-  FAN_BRACKET_INSET = 235.0; // vertical bracket bar from panel edge
-  FAN_IMG_SIZE = 36.0; // sprite size for fan evolutions
+  FAN_SPRITE_INSET = 75.0;
+  FAN_BRACKET_INSET = 235.0;
+  FAN_IMG_SIZE = 36.0;
   DARK_BG: TAlphaColor = $FF2A2A2A;
   HTTP_TIMEOUT_MS = 10000;
+  EVO_PAGE_SIZE = 2;
   GRAYSCALE_MATRIX: TSkColorMatrix = (M11: 0.299; M12: 0.587; M13: 0.114;
     M14: 0; M15: 0; M21: 0.299; M22: 0.587; M23: 0.114; M24: 0; M25: 0;
     M31: 0.299; M32: 0.587; M33: 0.114; M34: 0; M35: 0; M41: 0; M42: 0; M43: 0;
@@ -70,37 +76,136 @@ begin
   FThemeColor := $FFE25D27;
   FFontFamily := '';
   FGeneration := 0;
-  SetLength(FNodes, 0);
-  SetLength(FImages, 0);
-  SetLength(FImageStates, 0);
+  FEvoPage := 0;
+  FEvoPageTotal := 0;
+  FArrowLeftRect := TRectF.Empty;
+  FArrowRightRect := TRectF.Empty;
+  SetLength(FFullNodes, 0);
+  SetLength(FFullImages, 0);
+  SetLength(FFullStates, 0);
+  SetLength(FPageIdxs, 0);
   SetLength(FNodeRects, 0);
   OnDraw := DrawEvolution;
   OnMouseDown := HandleMouseDown;
   Cursor := crHandPoint;
 end;
 
+procedure TEvolutionPanel.ComputePageIdxs;
+var
+  I, J, LLeafCount, LLeafStart, LLeafEnd, LLeafIdx: Integer;
+  LIsLeaf: TArray<Boolean>;
+  LLeafOrder: TArray<Integer>;
+  LIncluded: TArray<Boolean>;
+  LFullCount: Integer;
+  LParId: Integer;
+  LFound: Boolean;
+begin
+  LFullCount := Length(FFullNodes);
+  if LFullCount = 0 then
+  begin
+    SetLength(FPageIdxs, 0);
+    FEvoPageTotal := 0;
+    Exit;
+  end;
+
+  // Build LIsLeaf for full nodes
+  SetLength(LIsLeaf, LFullCount);
+  LLeafCount := 0;
+  for I := 0 to LFullCount - 1 do
+  begin
+    LIsLeaf[I] := True;
+    for J := 0 to LFullCount - 1 do
+      if FFullNodes[J].ParentId = FFullNodes[I].PokemonId then
+      begin
+        LIsLeaf[I] := False;
+        Break;
+      end;
+    if LIsLeaf[I] then
+      Inc(LLeafCount);
+  end;
+
+  // No pagination for simple chains (<=2 leaves)
+  if LLeafCount <= 2 then
+  begin
+    FEvoPageTotal := 0;
+    SetLength(FPageIdxs, LFullCount);
+    for I := 0 to LFullCount - 1 do
+      FPageIdxs[I] := I;
+    Exit;
+  end;
+
+  // Collect leaf order
+  SetLength(LLeafOrder, 0);
+  for I := 0 to LFullCount - 1 do
+    if LIsLeaf[I] then
+    begin
+      SetLength(LLeafOrder, Length(LLeafOrder) + 1);
+      LLeafOrder[High(LLeafOrder)] := I;
+    end;
+
+  FEvoPageTotal := Ceil(LLeafCount / EVO_PAGE_SIZE);
+  FEvoPage := EnsureRange(FEvoPage, 0, FEvoPageTotal - 1);
+  LLeafStart := FEvoPage * EVO_PAGE_SIZE;
+  LLeafEnd := Min(High(LLeafOrder), LLeafStart + EVO_PAGE_SIZE - 1);
+
+  // Build included set: stage-0 nodes + selected leaves + their ancestors
+  SetLength(LIncluded, LFullCount);
+  for I := 0 to LFullCount - 1 do
+    LIncluded[I] := FFullNodes[I].Stage = 0;
+
+  for LLeafIdx := LLeafStart to LLeafEnd do
+  begin
+    I := LLeafOrder[LLeafIdx];
+    LIncluded[I] := True;
+    LParId := FFullNodes[I].ParentId;
+    while LParId > 0 do
+    begin
+      LFound := False;
+      for J := 0 to LFullCount - 1 do
+        if FFullNodes[J].PokemonId = LParId then
+        begin
+          LIncluded[J] := True;
+          LParId := FFullNodes[J].ParentId;
+          LFound := True;
+          Break;
+        end;
+      if not LFound then
+        Break;
+    end;
+  end;
+
+  SetLength(FPageIdxs, 0);
+  for I := 0 to LFullCount - 1 do
+    if LIncluded[I] then
+    begin
+      SetLength(FPageIdxs, Length(FPageIdxs) + 1);
+      FPageIdxs[High(FPageIdxs)] := I;
+    end;
+end;
+
 procedure TEvolutionPanel.LoadChain(const ANodes: TArray<TEvolutionNode>);
 var
   I, LGen: Integer;
 begin
-  FNodes := ANodes;
+  FFullNodes := ANodes;
+  FEvoPage := 0;
   Inc(FGeneration);
   LGen := FGeneration;
-  SetLength(FImages, Length(ANodes));
-  SetLength(FImageStates, Length(ANodes));
-  SetLength(FNodeRects, Length(ANodes));
-  for I := 0 to High(FImages) do
+  SetLength(FFullImages, Length(ANodes));
+  SetLength(FFullStates, Length(ANodes));
+  for I := 0 to High(FFullImages) do
   begin
-    FImages[I] := nil;
-    if FNodes[I].SpriteUrl.IsEmpty then
-      FImageStates[I] := eisFailed
+    FFullImages[I] := nil;
+    if FFullNodes[I].SpriteUrl.IsEmpty then
+      FFullStates[I] := eisFailed
     else
-      FImageStates[I] := eisLoading;
+      FFullStates[I] := eisLoading;
   end;
+  ComputePageIdxs;
   Redraw;
-  for I := 0 to High(FNodes) do
-    if not FNodes[I].SpriteUrl.IsEmpty then
-      LoadSpriteAsync(I, FNodes[I].SpriteUrl, LGen);
+  for I := 0 to High(FFullNodes) do
+    if not FFullNodes[I].SpriteUrl.IsEmpty then
+      LoadSpriteAsync(I, FFullNodes[I].SpriteUrl, LGen);
 end;
 
 procedure TEvolutionPanel.LoadSpriteAsync(const AIndex: Integer;
@@ -141,13 +246,13 @@ begin
         begin
           if AGen <> FGeneration then
             Exit;
-          if AIndex < Length(FImages) then
+          if AIndex < Length(FFullImages) then
           begin
-            FImages[AIndex] := LImage;
+            FFullImages[AIndex] := LImage;
             if Assigned(LImage) then
-              FImageStates[AIndex] := eisLoaded
+              FFullStates[AIndex] := eisLoaded
             else
-              FImageStates[AIndex] := eisFailed;
+              FFullStates[AIndex] := eisFailed;
             Redraw;
           end;
         end));
@@ -173,8 +278,6 @@ begin
     LTextStyle.FontFamilies := ['Segoe UI'];
   LTextStyle.FontSize := AFontSize;
   LTextStyle.Color := AColor;
-
-  // FORCE BOLD, NO ITALIC
   LTextStyle.FontStyle := TSkFontStyle.Bold;
 
   LBuilder := TSkParagraphBuilder.Create(LParaStyle);
@@ -235,18 +338,18 @@ function TEvolutionPanel.FormatTrigger(const ATrigger
 begin
   Result := '';
   if ATrigger.TriggerType = 'use-item' then
-    Result := FormatItemName(ATrigger.ItemName)
+    Result := UpperCase(FormatItemName(ATrigger.ItemName))
   else if ATrigger.TriggerType = 'trade' then
   begin
     if not ATrigger.HeldItem.IsEmpty then
-      Result := 'TROCA C/ ' + FormatItemName(ATrigger.HeldItem)
+      Result := 'TROCA COM ' + UpperCase(FormatItemName(ATrigger.HeldItem))
     else
       Result := 'TROCA';
   end
   else if ATrigger.TriggerType = 'level-up' then
   begin
     if ATrigger.MinLevel > 0 then
-      Result := 'NV.' + ATrigger.MinLevel.ToString
+      Result := 'N'#205'VEL ' + ATrigger.MinLevel.ToString
     else if ATrigger.MinHappiness > 0 then
     begin
       if ATrigger.TimeOfDay = 'day' then
@@ -257,16 +360,16 @@ begin
         Result := 'AMIZADE';
     end
     else if not ATrigger.KnownMoveType.IsEmpty then
-      Result := 'MOV. ' + FormatItemName(ATrigger.KnownMoveType)
+      Result := 'MOVE ' + UpperCase(FormatItemName(ATrigger.KnownMoveType))
     else if ATrigger.TimeOfDay = 'day' then
-      Result := 'LEVEL (DIA)'
+      Result := 'LEVEL UP (DIA)'
     else if ATrigger.TimeOfDay = 'night' then
-      Result := 'LEVEL (NOITE)'
+      Result := 'LEVEL UP (NOITE)'
     else
       Result := 'LEVEL UP';
   end
   else if ATrigger.TriggerType = 'shed' then
-    Result := 'NV.20 + SLOT'
+    Result := 'N'#205'VEL 20 + SLOT'
   else if not ATrigger.TriggerType.IsEmpty then
     Result := UpperCase(FormatItemName(ATrigger.TriggerType));
 end;
@@ -279,13 +382,37 @@ var
 begin
   if Button <> mbLeft then
     Exit;
+  LPoint := TPointF.Create(X, Y);
+
+  // Navigation arrow clicks
+  if FEvoPageTotal > 1 then
+  begin
+    if FArrowLeftRect.Contains(LPoint) and (FEvoPage > 0) then
+    begin
+      Dec(FEvoPage);
+      ComputePageIdxs;
+      Redraw;
+      Exit;
+    end;
+    if FArrowRightRect.Contains(LPoint) and (FEvoPage < FEvoPageTotal - 1) then
+    begin
+      Inc(FEvoPage);
+      ComputePageIdxs;
+      Redraw;
+      Exit;
+    end;
+  end;
+
+  // Node clicks — FNodeRects maps to FPageIdxs → FFullNodes
   if not Assigned(FOnNodeClick) then
     Exit;
-  LPoint := TPointF.Create(X, Y);
   for I := 0 to High(FNodeRects) do
-    if FNodeRects[I].Contains(LPoint) and (I < Length(FNodes)) then
+    if FNodeRects[I].Contains(LPoint) and (I < Length(FPageIdxs)) then
     begin
-      FOnNodeClick(FNodes[I].PokemonId);
+      var
+      LOrigIdx := FPageIdxs[I];
+      if LOrigIdx < Length(FFullNodes) then
+        FOnNodeClick(FFullNodes[LOrigIdx].PokemonId);
       Exit;
     end;
 end;
@@ -321,8 +448,12 @@ var
   LBracketX_L, LBracketX_R: Single;
   LMinYL, LMaxYL, LMinYR, LMaxYR: Single;
   LHighlightColor: TAlphaColor;
+  LOrigIdx: Integer;
+  LUsePaginatedHorizontal: Boolean;
+  LNonRootIdxs: array [0 .. 1] of Integer;
+  LNonRootCount: Integer;
 begin
-  LCount := Length(FNodes);
+  LCount := Length(FPageIdxs);
   if LCount = 0 then
     Exit;
 
@@ -333,8 +464,11 @@ begin
 
   LMaxStage := 0;
   for I := 0 to LCount - 1 do
-    if FNodes[I].Stage > LMaxStage then
-      LMaxStage := FNodes[I].Stage;
+  begin
+    LOrigIdx := FPageIdxs[I];
+    if FFullNodes[LOrigIdx].Stage > LMaxStage then
+      LMaxStage := FFullNodes[LOrigIdx].Stage;
+  end;
   LNumStages := LMaxStage + 1;
 
   SetLength(LIsLeaf, LCount);
@@ -343,7 +477,8 @@ begin
   begin
     LIsLeaf[I] := True;
     for J := 0 to LCount - 1 do
-      if FNodes[J].ParentId = FNodes[I].PokemonId then
+      if FFullNodes[FPageIdxs[J]].ParentId = FFullNodes[FPageIdxs[I]].PokemonId
+      then
       begin
         LIsLeaf[I] := False;
         Break;
@@ -359,7 +494,8 @@ begin
   LRootIsActive := False;
   LRootIdx := -1;
   for I := 0 to LCount - 1 do
-    if (FNodes[I].Stage = 0) and FNodes[I].IsActive then
+    if (FFullNodes[FPageIdxs[I]].Stage = 0) and FFullNodes[FPageIdxs[I]].IsActive
+    then
     begin
       LRootIsActive := True;
       LRootIdx := I;
@@ -367,6 +503,21 @@ begin
     end;
   LUseCenterFan := (not LUseHorizontal) and LRootIsActive and (LLeafCount >= 4)
     and (LMaxStage = 1);
+  LUsePaginatedHorizontal := (FEvoPageTotal > 1) and (LMaxStage = 1);
+  if LUsePaginatedHorizontal then
+  begin
+    LUseHorizontal := False;
+    LUseCenterFan := False;
+  end;
+
+  // Find root for layouts that need it
+  if LRootIdx = -1 then
+    for I := 0 to LCount - 1 do
+      if FFullNodes[FPageIdxs[I]].Stage = 0 then
+      begin
+        LRootIdx := I;
+        Break;
+      end;
 
   SetLength(LCx, LCount);
   SetLength(LCy, LCount);
@@ -381,14 +532,52 @@ begin
   LLeftIdx := 0;
   LRightIdx := 0;
 
-  if LUseHorizontal then
+  if LUsePaginatedHorizontal then
+  begin
+    LImgSize := Max(60.0, Min(96.0, Min(LUsableH * 0.55, LUsableW * 0.22)));
+    LTextW := Min(120.0, LUsableW / 3 - 8);
+    LNonRootCount := 0;
+    LNonRootIdxs[0] := -1;
+    LNonRootIdxs[1] := -1;
+    for I := 0 to LCount - 1 do
+    begin
+      if FFullNodes[FPageIdxs[I]].Stage = 0 then
+      begin
+        LCx[I] := LPanelRect.Left + LUsableW / 2;
+        LCy[I] := LPanelRect.Top + LUsableH / 2;
+      end
+      else
+      begin
+        if LNonRootCount < 2 then
+          LNonRootIdxs[LNonRootCount] := I;
+        Inc(LNonRootCount);
+      end;
+    end;
+    if LNonRootCount = 1 then
+    begin
+      I := LNonRootIdxs[0];
+      LCx[I] := LPanelRect.Left + LUsableW * 0.78;
+      LCy[I] := LPanelRect.Top + LUsableH / 2;
+    end
+    else if LNonRootCount >= 2 then
+    begin
+      I := LNonRootIdxs[0];
+      LCx[I] := LPanelRect.Left + LUsableW * 0.18;
+      LCy[I] := LPanelRect.Top + LUsableH / 2;
+      I := LNonRootIdxs[1];
+      LCx[I] := LPanelRect.Left + LUsableW * 0.82;
+      LCy[I] := LPanelRect.Top + LUsableH / 2;
+    end;
+  end
+  else if LUseHorizontal then
   begin
     LColW := LUsableW / LNumStages;
     LImgSize := Max(48.0, Min(96.0, LColW * 0.42));
     LTextW := Min(140.0, LColW - 8.0);
     for I := 0 to LCount - 1 do
     begin
-      LCx[I] := LPanelRect.Left + (FNodes[I].Stage + 0.5) * LColW;
+      LCx[I] := LPanelRect.Left + (FFullNodes[FPageIdxs[I]].Stage +
+        0.5) * LColW;
       LCy[I] := LPanelRect.Top + LUsableH / 2;
     end;
   end
@@ -410,7 +599,7 @@ begin
     LLeftIdx := 0;
     LRightIdx := 0;
     for I := 0 to LCount - 1 do
-      if FNodes[I].Stage > 0 then
+      if FFullNodes[FPageIdxs[I]].Stage > 0 then
       begin
         if LLeftIdx < LHalfCount then
         begin
@@ -436,7 +625,7 @@ begin
     LTextW := Min(120.0, LLeafSlotW - 6.0);
 
     for I := 0 to LCount - 1 do
-      LCy[I] := LPanelRect.Top + (FNodes[I].Stage + 0.5) * LRowH;
+      LCy[I] := LPanelRect.Top + (FFullNodes[FPageIdxs[I]].Stage + 0.5) * LRowH;
 
     LLeafAssigned := 0;
     for I := 0 to LCount - 1 do
@@ -448,14 +637,15 @@ begin
 
     for var S := LMaxStage - 1 downto 0 do
       for I := 0 to LCount - 1 do
-        if FNodes[I].Stage = S then
+        if FFullNodes[FPageIdxs[I]].Stage = S then
         begin
           var
             LSum: Single := 0;
           var
             LChildCount: Integer := 0;
           for J := 0 to LCount - 1 do
-            if FNodes[J].ParentId = FNodes[I].PokemonId then
+            if FFullNodes[FPageIdxs[J]].ParentId = FFullNodes[FPageIdxs[I]].PokemonId
+            then
             begin
               LSum := LSum + LCx[J];
               Inc(LChildCount);
@@ -483,6 +673,60 @@ begin
   LPaint.Color := DARK_BG;
   ACanvas.DrawRoundRect(LPanelRect, 12, 12, LPaint);
 
+  // Navigation arrows (drawn on outer border, before clip)
+  if FEvoPageTotal > 1 then
+  begin
+    var
+      LArrowW: Single := 18;
+    var
+      LArrowH: Single := 26;
+    var
+      LArrowPad: Single := 8;
+    var
+      LArrowMidY: Single := ADest.Top + ADest.Height / 2;
+    FArrowLeftRect := TRectF.Create(ADest.Left + LArrowPad,
+      LArrowMidY - LArrowH / 2, ADest.Left + LArrowPad + LArrowW,
+      LArrowMidY + LArrowH / 2);
+    FArrowRightRect := TRectF.Create(ADest.Right - LArrowPad - LArrowW,
+      LArrowMidY - LArrowH / 2, ADest.Right - LArrowPad,
+      LArrowMidY + LArrowH / 2);
+
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 2.5;
+    LPaint.Color := $AAFFFFFF;
+    // Left chevron "<" — hidden on first page
+    if FEvoPage > 0 then
+    begin
+      ACanvas.DrawLine(TPointF.Create(FArrowLeftRect.Right - 4,
+        FArrowLeftRect.Top + 4), TPointF.Create(FArrowLeftRect.Left + 5,
+        LArrowMidY), LPaint);
+      ACanvas.DrawLine(TPointF.Create(FArrowLeftRect.Left + 5, LArrowMidY),
+        TPointF.Create(FArrowLeftRect.Right - 4, FArrowLeftRect.Bottom -
+        4), LPaint);
+    end;
+    // Right chevron ">" — hidden on last page
+    if FEvoPage < FEvoPageTotal - 1 then
+    begin
+      ACanvas.DrawLine(TPointF.Create(FArrowRightRect.Left + 4,
+        FArrowRightRect.Top + 4), TPointF.Create(FArrowRightRect.Right - 5,
+        LArrowMidY), LPaint);
+      ACanvas.DrawLine(TPointF.Create(FArrowRightRect.Right - 5, LArrowMidY),
+        TPointF.Create(FArrowRightRect.Left + 4, FArrowRightRect.Bottom -
+        4), LPaint);
+    end;
+
+    // Page indicator "1/4" — inside the dark panel, bottom-right
+    LParagraph := MakeParagraph(Format('%d/%d', [FEvoPage + 1, FEvoPageTotal]),
+      10, $DDFFFFFF, True);
+    LParagraph.Layout(54);
+    LParagraph.Paint(ACanvas, LPanelRect.Right - 58, LPanelRect.Bottom - 18);
+  end
+  else
+  begin
+    FArrowLeftRect := TRectF.Empty;
+    FArrowRightRect := TRectF.Empty;
+  end;
+
   ACanvas.Save;
   ACanvas.ClipRect(LPanelRect, TSkClipOp.Intersect, False);
   LGrayFilter := TSkColorFilter.MakeMatrix(GRAYSCALE_MATRIX);
@@ -492,14 +736,32 @@ begin
   LPaint.StrokeWidth := 1.5;
   LPaint.Color := $55FFFFFF;
 
-  if LUseCenterFan then
+  if LUsePaginatedHorizontal then
+  begin
+    // Horizontal arrows: left evo ← root → right evo
+    for I := 0 to LCount - 1 do
+    begin
+      if FFullNodes[FPageIdxs[I]].Stage = 0 then
+        Continue;
+      if LRootIdx = -1 then
+        Continue;
+      if LCx[I] < LCx[LRootIdx] then
+        ACanvas.DrawLine(TPointF.Create(LCx[I] + LImgSize / 2, LCy[I]),
+          TPointF.Create(LCx[LRootIdx] - LImgSize / 2, LCy[LRootIdx]), LPaint)
+      else
+        ACanvas.DrawLine(TPointF.Create(LCx[LRootIdx] + LImgSize / 2,
+          LCy[LRootIdx]), TPointF.Create(LCx[I] - LImgSize / 2, LCy[I]
+          ), LPaint);
+    end;
+  end
+  else if LUseCenterFan then
   begin
     LMinYL := MaxSingle;
     LMaxYL := -MaxSingle;
     LMinYR := MaxSingle;
     LMaxYR := -MaxSingle;
     for I := 0 to LCount - 1 do
-      if FNodes[I].Stage > 0 then
+      if FFullNodes[FPageIdxs[I]].Stage > 0 then
       begin
         if LCx[I] < LCx[LRootIdx] then
         begin
@@ -521,7 +783,7 @@ begin
       ACanvas.DrawLine(TPointF.Create(LBracketX_L, LMinYL),
         TPointF.Create(LBracketX_L, LMaxYL), LPaint);
     for I := 0 to LCount - 1 do
-      if (FNodes[I].Stage > 0) and (LCx[I] < LCx[LRootIdx]) then
+      if (FFullNodes[FPageIdxs[I]].Stage > 0) and (LCx[I] < LCx[LRootIdx]) then
         ACanvas.DrawLine(TPointF.Create(LCx[I] + LImgSize / 2, LCy[I]),
           TPointF.Create(LBracketX_L, LCy[I]), LPaint);
     ACanvas.DrawLine(TPointF.Create(LBracketX_L, LCy[LRootIdx]),
@@ -531,7 +793,7 @@ begin
       ACanvas.DrawLine(TPointF.Create(LBracketX_R, LMinYR),
         TPointF.Create(LBracketX_R, LMaxYR), LPaint);
     for I := 0 to LCount - 1 do
-      if (FNodes[I].Stage > 0) and (LCx[I] >= LCx[LRootIdx]) then
+      if (FFullNodes[FPageIdxs[I]].Stage > 0) and (LCx[I] >= LCx[LRootIdx]) then
         ACanvas.DrawLine(TPointF.Create(LBracketX_R, LCy[I]),
           TPointF.Create(LCx[I] - LImgSize / 2, LCy[I]), LPaint);
     ACanvas.DrawLine(TPointF.Create(LCx[LRootIdx] + LImgSize / 2, LCy[LRootIdx]
@@ -541,11 +803,12 @@ begin
   begin
     for I := 0 to LCount - 1 do
     begin
-      if FNodes[I].Stage = 0 then
+      if FFullNodes[FPageIdxs[I]].Stage = 0 then
         Continue;
       LParentIdx := -1;
       for J := 0 to LCount - 1 do
-        if FNodes[J].PokemonId = FNodes[I].ParentId then
+        if FFullNodes[FPageIdxs[J]].PokemonId = FFullNodes[FPageIdxs[I]].ParentId
+        then
         begin
           LParentIdx := J;
           Break;
@@ -564,11 +827,12 @@ begin
       LTrunkDrawn[I] := False;
     for I := 0 to LCount - 1 do
     begin
-      if FNodes[I].Stage = 0 then
+      if FFullNodes[FPageIdxs[I]].Stage = 0 then
         Continue;
       LParentIdx := -1;
       for J := 0 to LCount - 1 do
-        if FNodes[J].PokemonId = FNodes[I].ParentId then
+        if FFullNodes[FPageIdxs[J]].PokemonId = FFullNodes[FPageIdxs[I]].ParentId
+        then
         begin
           LParentIdx := J;
           Break;
@@ -577,7 +841,8 @@ begin
         Continue;
       LSibCount := 0;
       for J := 0 to LCount - 1 do
-        if FNodes[J].ParentId = FNodes[I].ParentId then
+        if FFullNodes[FPageIdxs[J]].ParentId = FFullNodes[FPageIdxs[I]].ParentId
+        then
           Inc(LSibCount);
 
       LMidY := (LCy[LParentIdx] + LCy[I]) / 2;
@@ -592,7 +857,8 @@ begin
           LMinCX := LCx[I];
           LMaxCX := LCx[I];
           for J := 0 to LCount - 1 do
-            if FNodes[J].ParentId = FNodes[I].ParentId then
+            if FFullNodes[FPageIdxs[J]].ParentId = FFullNodes[FPageIdxs[I]].ParentId
+            then
             begin
               if LCx[J] < LMinCX then
                 LMinCX := LCx[J];
@@ -612,13 +878,14 @@ begin
     end;
   end;
 
+  // Trigger labels
   for I := 0 to LCount - 1 do
   begin
-    if FNodes[I].Stage = 0 then
+    if FFullNodes[FPageIdxs[I]].Stage = 0 then
       Continue;
     if LUseCenterFan then
       Continue;
-    LText := FormatTrigger(FNodes[I].Trigger);
+    LText := FormatTrigger(FFullNodes[FPageIdxs[I]].Trigger);
     if LText.IsEmpty then
       Continue;
     LParagraph := MakeParagraph(LText, LTriggerFontSize, $CCFFFFFF, True);
@@ -627,20 +894,24 @@ begin
       LParagraph.Height - 2);
   end;
 
+  // Sprites and names
   LPaint.Style := TSkPaintStyle.Fill;
   for I := 0 to LCount - 1 do
   begin
+    LOrigIdx := FPageIdxs[I];
     LImgRect := FNodeRects[I];
-    if (I < Length(FImages)) and Assigned(FImages[I]) then
+    if (LOrigIdx < Length(FFullImages)) and Assigned(FFullImages[LOrigIdx]) then
     begin
-      if FNodes[I].IsActive then
+      if FFullNodes[LOrigIdx].IsActive then
         LPaint.ColorFilter := nil
       else
         LPaint.ColorFilter := LGrayFilter;
 
-      ACanvas.DrawImageRect(FImages[I], LImgRect, TSkSamplingOptions.Create(TSkFilterMode.Linear, TSkMipmapMode.None), LPaint);
+      ACanvas.DrawImageRect(FFullImages[LOrigIdx], LImgRect,
+        TSkSamplingOptions.Create(TSkFilterMode.Linear,
+        TSkMipmapMode.None), LPaint);
       LPaint.ColorFilter := nil;
-      if FNodes[I].IsActive then
+      if FFullNodes[LOrigIdx].IsActive then
       begin
         LPaint.Style := TSkPaintStyle.Stroke;
         LPaint.StrokeWidth := 2;
@@ -653,13 +924,14 @@ begin
     begin
       LPaint.Style := TSkPaintStyle.Stroke;
       LPaint.StrokeWidth := 1.5;
-      if FNodes[I].IsActive then
+      if FFullNodes[LOrigIdx].IsActive then
         LPaint.Color := $66FFFFFF
       else
         LPaint.Color := $33FFFFFF;
       ACanvas.DrawCircle(LCx[I], LCy[I], LImgSize / 2 - 2, LPaint);
 
-      if (I < Length(FImageStates)) and (FImageStates[I] = eisLoading) then
+      if (LOrigIdx < Length(FFullStates)) and
+        (FFullStates[LOrigIdx] = eisLoading) then
         LText := 'CARREGANDO...'
       else
         LText := 'SEM SPRITE';
@@ -671,15 +943,28 @@ begin
       LPaint.Style := TSkPaintStyle.Fill;
     end;
 
-    if FNodes[I].IsActive then
+    if FFullNodes[LOrigIdx].IsActive then
       LNameColor := LHighlightColor
     else
       LNameColor := $AAFFFFFF;
-    LParagraph := MakeParagraph(CapitalizeName(FNodes[I].Name), LNameFontSize,
-      LNameColor, True);
+    LParagraph := MakeParagraph(CapitalizeName(FFullNodes[LOrigIdx].Name),
+      LNameFontSize, LNameColor, True);
     LParagraph.Layout(LTextW);
     LParagraph.Paint(ACanvas, LCx[I] - LTextW / 2, LCy[I] + LImgSize / 2 + 2);
   end;
+
+  // Subtle shadow hint for large families — omit when paginated (content is complete)
+  if (Length(FFullNodes) > 5) and not LUsePaginatedHorizontal then
+  begin
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Shader := TSkShader.MakeGradientLinear
+      (TPointF.Create(LPanelRect.Right - 36, LPanelRect.Top),
+      TPointF.Create(LPanelRect.Right, LPanelRect.Top), [$00000000, $CC000000],
+      nil, TSkTileMode.Clamp);
+    ACanvas.DrawRect(LPanelRect, LPaint);
+    LPaint.Shader := nil;
+  end;
+
   ACanvas.Restore;
 end;
 

@@ -65,6 +65,7 @@ type
     FIdLabel: TSkLabel;
     FSpritePaintBox: TSkPaintBox;
     FCurrentSprite: ISkImage;
+    FCurrentTypeColor: TAlphaColor;
     FHistoryPanel: TPanel;
     FHistoryOverlay: TSkPaintBox;
     FIsHistoryVisible: Boolean;
@@ -89,6 +90,11 @@ type
     FCurrentFlavorTranslated: TArray<string>;
     FFlavorNeedsTranslation: Boolean;
     FFlavorTargetLang: string;
+    FFormChips: TSkPaintBox;
+    FCurrentPokemonName: string;
+    FCurrentVarietyLabels: TArray<string>;
+    FCurrentVarietyApiNames: TArray<string>;
+    FFormChipRects: TArray<TRectF>;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -112,6 +118,8 @@ type
     procedure CenterSearchBar;
     procedure WMAfterCreate(var Msg: TMessage); message WM_USER + 1;
     procedure FormResize(Sender: TObject);
+    procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
     procedure RandomIconClick(Sender: TObject);
     procedure SearchIconClick(Sender: TObject);
     procedure TypeBadgeClick(Sender: TObject);
@@ -143,6 +151,11 @@ type
       const ADest: TRectF; const AOpacity: Single);
     procedure ImgPokemonMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure DrawFormChips(ASender: TObject; const ACanvas: ISkCanvas;
+      const ADest: TRectF; const AOpacity: Single);
+    procedure FormChipsMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure UpdateFormChips(APokemon: TPokemon);
 
   const
     FONT_FAMILY = 'Montserrat';
@@ -167,6 +180,7 @@ type
     ICON_SIZE = 20;
     ICON_PAD = 8;
     SPRITE_SIZE = 200;
+    FORMS_H = 26;
   public
     procedure Initialize(const AService: IPokemonService);
   end;
@@ -193,6 +207,7 @@ begin
 
   FThemeTextColor := TAlphaColors.Black;
   OnResize := FormResize;
+  OnMouseDown := FormMouseDown;
   SetupLayout;
   SetupSearchBar;
   SetupStatsPanel;
@@ -290,6 +305,15 @@ begin
   FShinyBtn.OnDraw := DrawShinyBtn;
   FShinyBtn.BringToFront;
   FShinyBtn.Visible := False;
+
+  FFormChips := TSkPaintBox.Create(Self);
+  FFormChips.Parent := pnlImage;
+  FFormChips.SetBounds(0, pnlImage.Height - FORMS_H - 4, pnlImage.Width, FORMS_H);
+  FFormChips.Anchors := [akLeft, akBottom, akRight];
+  FFormChips.Cursor := crHandPoint;
+  FFormChips.OnDraw := DrawFormChips;
+  FFormChips.OnMouseDown := FormChipsMouseDown;
+  FFormChips.Visible := False;
 
   // Fix FlowPanel properties
   fpTypes.AutoSize := False;
@@ -488,9 +512,9 @@ begin
   if LLum > 200 then
   begin
     LEffectiveColor := $00F0F0F0;
-    FThemeTextColor := TAlphaColors.Black;
+    FThemeTextColor := DARK_PANEL_ALPHA;
   end
-  else if LLum < 60 then
+  else if LLum < 153 then
   begin
     LEffectiveColor := AColor;
     FThemeTextColor := TAlphaColors.White;
@@ -498,7 +522,7 @@ begin
   else
   begin
     LEffectiveColor := AColor;
-    FThemeTextColor := TAlphaColors.Black;
+    FThemeTextColor := DARK_PANEL_ALPHA;
   end;
 
   pnlImage.Color := LEffectiveColor;
@@ -520,6 +544,7 @@ begin
     DWORD(GetBValue(LEffectiveColor));
 
   FEvolutionPanel.ThemeColor := LAlphaColor;
+  FCurrentTypeColor := LAlphaColor;
 
   if LLum < 60 then
     FStatsPanel.BarColor := $FFFFD700
@@ -537,6 +562,8 @@ begin
   FEvolutionPanel.Redraw;
   if Assigned(FShinyBtn) and FShinyBtn.Visible then
     FShinyBtn.Redraw;
+  if Assigned(FFormChips) and FFormChips.Visible then
+    FFormChips.Redraw;
   UpdateFavIcons;
 end;
 
@@ -761,6 +788,7 @@ begin
               Exit;
             end;
             FCurrentId := LPokemon.Id;
+            FCurrentPokemonName := LPokemon.Name;
             FCurrentSpriteUrl := LPokemon.SpriteUrl;
             FCurrentShinySpriteUrl := LPokemon.ShinySpriteUrl;
             if FIsShiny <> LUseShiny then
@@ -1059,16 +1087,9 @@ end;
 
 procedure TPokedexView.SearchEditExit(Sender: TObject);
 begin
-  TThread.CreateAnonymousThread(
-    procedure
-    begin
-      Sleep(200);
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          HideHistoryPanel;
-        end));
-    end).Start;
+  // Fechar dropdown imediatamente quando sai do edit
+  // Não usar SetFocus indevido que dispara SearchEditEnter novamente
+  HideHistoryPanel;
 end;
 
 procedure TPokedexView.DrawSearchBg(ASender: TObject; const ACanvas: ISkCanvas;
@@ -1162,8 +1183,16 @@ begin
   LPaint.Color := $28FFFFFF;
   ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
   LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := 1;
-  LPaint.Color := $44FFFFFF;
+  if FIsShiny then
+  begin
+    LPaint.StrokeWidth := 2;
+    LPaint.Color := FCurrentTypeColor;
+  end
+  else
+  begin
+    LPaint.StrokeWidth := 1;
+    LPaint.Color := $44FFFFFF;
+  end;
   ACanvas.DrawRoundRect(ADest, ADest.Height / 2, ADest.Height / 2, LPaint);
   if FIsShiny then
   begin
@@ -1290,6 +1319,19 @@ begin
   if Assigned(FEvolutionPanel) then
     FEvolutionPanel.SetBounds(0, ClientHeight - EVOLUTION_H, ClientWidth,
       EVOLUTION_H);
+end;
+
+procedure TPokedexView.FormMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  // Fechar dropdown se clicou fora dele e da search bar
+  if FIsHistoryVisible and Assigned(FHistoryPanel) then
+  begin
+    if not FSearchContainer.ClientRect.Contains(FSearchContainer.ScreenToClient
+      (ClientToScreen(Point(X, Y)))) and not FHistoryPanel.ClientRect.Contains
+      (FHistoryPanel.ScreenToClient(ClientToScreen(Point(X, Y)))) then
+      HideHistoryPanel;
+  end;
 end;
 
 procedure TPokedexView.CenterSprite;
@@ -1688,6 +1730,12 @@ begin
 
   FStatsPanel.LoadBreeding(LGenderRatio, LEggGroups, LHatchCounter);
   FStatsPanel.LoadSpeciesExtra(LGeneration, LHabitat, LPastTypes);
+  if Assigned(APokemon.SpeciesData) then
+    FStatsPanel.LoadSpeciesFlags(APokemon.SpeciesData.IsLegendary,
+      APokemon.SpeciesData.IsMythical)
+  else
+    FStatsPanel.LoadSpeciesFlags(False, False);
+  UpdateFormChips(APokemon);
 end;
 
 procedure TPokedexView.UpdatePokemonTypes(APokemon: TPokemon);
@@ -1787,6 +1835,12 @@ begin
   begin
     Key := #0;
     PerformSearch(FSearchEdit.Text);
+  end
+  else if Key = #27 then
+  begin
+    Key := #0;
+    HideHistoryPanel;
+    FSearchEdit.Text := '';
   end;
 end;
 
@@ -1889,6 +1943,179 @@ begin
   FHistoryOverlay.OnDraw := DrawHistoryOverlay;
   FHistoryOverlay.OnMouseDown := HistoryOverlayMouseDown;
   FHistoryOverlay.OnMouseMove := HistoryOverlayMouseMove;
+end;
+
+procedure TPokedexView.UpdateFormChips(APokemon: TPokemon);
+var
+  LBaseName, LLabel, LSuffix: string;
+  I: Integer;
+  LHasMultiple: Boolean;
+begin
+  if not Assigned(FFormChips) then
+    Exit;
+  SetLength(FCurrentVarietyLabels, 0);
+  SetLength(FCurrentVarietyApiNames, 0);
+  LHasMultiple := Assigned(APokemon.SpeciesData) and
+    (Length(APokemon.SpeciesData.Varieties) > 1);
+  if not LHasMultiple then
+  begin
+    FFormChips.Visible := False;
+    Exit;
+  end;
+  // find base (default) name to strip as prefix for labels
+  LBaseName := '';
+  for I := 0 to High(APokemon.SpeciesData.Varieties) do
+    if APokemon.SpeciesData.Varieties[I].IsDefault then
+    begin
+      LBaseName := APokemon.SpeciesData.Varieties[I].Pokemon.Name;
+      Break;
+    end;
+  SetLength(FCurrentVarietyLabels, Length(APokemon.SpeciesData.Varieties));
+  SetLength(FCurrentVarietyApiNames, Length(APokemon.SpeciesData.Varieties));
+  SetLength(FFormChipRects, Length(APokemon.SpeciesData.Varieties));
+  for I := 0 to High(APokemon.SpeciesData.Varieties) do
+  begin
+    FCurrentVarietyApiNames[I] := APokemon.SpeciesData.Varieties[I].Pokemon.Name;
+    if APokemon.SpeciesData.Varieties[I].IsDefault then
+      LLabel := 'Base'
+    else
+    begin
+      LSuffix := FCurrentVarietyApiNames[I];
+      if (LBaseName <> '') and LSuffix.StartsWith(LBaseName + '-', True) then
+        LSuffix := LSuffix.Substring(Length(LBaseName) + 1);
+      LLabel := TPokemonController.CapitalizeDisplayName(LSuffix);
+    end;
+    FCurrentVarietyLabels[I] := LLabel;
+  end;
+  FFormChips.Visible := True;
+  FFormChips.Redraw;
+end;
+
+procedure TPokedexView.DrawFormChips(ASender: TObject; const ACanvas: ISkCanvas;
+  const ADest: TRectF; const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+  LParaStyle: ISkParagraphStyle;
+  LTextStyle: ISkTextStyle;
+  LBuilder: ISkParagraphBuilder;
+  LP: ISkParagraph;
+  LChipW, LTotalW, LX, LChipH, LY: Single;
+  LChipWidths: TArray<Single>;
+  I: Integer;
+  LIsActive: Boolean;
+  LBgColor, LFgColor: TAlphaColor;
+  LR: TRectF;
+const
+  CHIP_FONT_SIZE = 8.5;
+  CHIP_H = 18;
+  CHIP_GAP = 6;
+  CHIP_PAD = 10;
+begin
+  if Length(FCurrentVarietyLabels) = 0 then
+    Exit;
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  LChipH := CHIP_H;
+  LY := ADest.Top + (ADest.Height - LChipH) / 2;
+  LParaStyle := TSkParagraphStyle.Create;
+  LParaStyle.MaxLines := 1;
+  LTextStyle := TSkTextStyle.Create;
+  LTextStyle.FontFamilies := [FFontName, 'Segoe UI'];
+  LTextStyle.FontSize := CHIP_FONT_SIZE;
+  LTextStyle.FontStyle := TSkFontStyle.Bold;
+  // Measure chip widths
+  SetLength(LChipWidths, Length(FCurrentVarietyLabels));
+  LTotalW := 0;
+  for I := 0 to High(FCurrentVarietyLabels) do
+  begin
+    LTextStyle.Color := TAlphaColors.White;
+    LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+    LBuilder.PushStyle(LTextStyle);
+    LBuilder.AddText(FCurrentVarietyLabels[I]);
+    LBuilder.Pop;
+    LP := LBuilder.Build;
+    LP.Layout(300);
+    LChipWidths[I] := LP.LongestLine + CHIP_PAD * 2;
+    if I > 0 then
+      LTotalW := LTotalW + CHIP_GAP;
+    LTotalW := LTotalW + LChipWidths[I];
+  end;
+  // Draw centered
+  LX := ADest.Left + (ADest.Width - LTotalW) / 2;
+  if LX < ADest.Left then
+    LX := ADest.Left;
+  for I := 0 to High(FCurrentVarietyLabels) do
+  begin
+    if I > 0 then
+      LX := LX + CHIP_GAP;
+    LChipW := LChipWidths[I];
+    LIsActive := SameText(FCurrentVarietyApiNames[I], FCurrentPokemonName);
+    LR := TRectF.Create(LX, LY, LX + LChipW, LY + LChipH);
+    if I <= High(FFormChipRects) then
+      FFormChipRects[I] := LR;
+
+    var LIsLightTheme: Boolean := FThemeTextColor <> TAlphaColors.White;
+    if LIsActive then
+    begin
+      LBgColor := FStatsPanel.BarColor and $40FFFFFF;
+      if LIsLightTheme then
+        LFgColor := DARK_PANEL_ALPHA
+      else
+        LFgColor := TAlphaColors.White;
+    end
+    else
+    begin
+      if LIsLightTheme then
+      begin
+        LBgColor := $20000000;
+        LFgColor := $AA000000;
+      end
+      else
+      begin
+        LBgColor := $18FFFFFF;
+        LFgColor := $AAFFFFFF;
+      end;
+    end;
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Color := LBgColor;
+    ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 1;
+    if LIsActive then
+      LPaint.Color := FStatsPanel.BarColor
+    else if LIsLightTheme then
+      LPaint.Color := $33000000
+    else
+      LPaint.Color := $33FFFFFF;
+    ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
+    LTextStyle.Color := LFgColor;
+    LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+    LBuilder.PushStyle(LTextStyle);
+    LBuilder.AddText(FCurrentVarietyLabels[I]);
+    LBuilder.Pop;
+    LP := LBuilder.Build;
+    LP.Layout(LChipW);
+    LP.Paint(ACanvas, LX + CHIP_PAD, LY + (LChipH - LP.Height) / 2);
+    LX := LX + LChipW;
+  end;
+end;
+
+procedure TPokedexView.FormChipsMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  I: Integer;
+  LPoint: TPointF;
+begin
+  if Button <> mbLeft then
+    Exit;
+  LPoint := TPointF.Create(X, Y);
+  for I := 0 to High(FFormChipRects) do
+    if FFormChipRects[I].Contains(LPoint) then
+    begin
+      if not SameText(FCurrentVarietyApiNames[I], FCurrentPokemonName) then
+        PerformSearch(FCurrentVarietyApiNames[I]);
+      Exit;
+    end;
 end;
 
 end.

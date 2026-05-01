@@ -103,6 +103,19 @@ type
     property Types: TArray<TPokemonType> read FTypes write FTypes;
   end;
 
+  TPokemonVariety = class
+  private
+    [JSONName('is_default')]
+    FIsDefault: Boolean;
+    [JSONName('pokemon')]
+    FPokemon: TApiResource;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    property IsDefault: Boolean read FIsDefault write FIsDefault;
+    property Pokemon: TApiResource read FPokemon write FPokemon;
+  end;
+
   TPokemonSpecies = class
   private
     [JSONName('flavor_text_entries')]
@@ -121,6 +134,12 @@ type
     FGeneration: TApiResource;
     [JSONName('habitat')]
     FHabitat: TApiResource;
+    [JSONName('is_legendary')]
+    FIsLegendary: Boolean;
+    [JSONName('is_mythical')]
+    FIsMythical: Boolean;
+    [JSONName('varieties')]
+    FVarieties: TArray<TPokemonVariety>;
   public
     destructor Destroy; override;
     property FlavorEntries: TArray<TFlavorText> read FFlavorEntries
@@ -133,6 +152,9 @@ type
     property EggGroups: TArray<TApiResource> read FEggGroups write FEggGroups;
     property Generation: TApiResource read FGeneration write FGeneration;
     property Habitat: TApiResource read FHabitat write FHabitat;
+    property IsLegendary: Boolean read FIsLegendary write FIsLegendary;
+    property IsMythical: Boolean read FIsMythical write FIsMythical;
+    property Varieties: TArray<TPokemonVariety> read FVarieties write FVarieties;
 
     function GetDescription(const ALang: string = 'en'): string;
   end;
@@ -340,16 +362,31 @@ begin
   inherited;
 end;
 
+{ TPokemonVariety }
+constructor TPokemonVariety.Create;
+begin
+  FPokemon := TApiResource.Create;
+end;
+
+destructor TPokemonVariety.Destroy;
+begin
+  FPokemon.Free;
+  inherited;
+end;
+
 { TPokemonSpecies }
 destructor TPokemonSpecies.Destroy;
 var
   LEntry: TFlavorText;
   LEggGroup: TApiResource;
+  LVariety: TPokemonVariety;
 begin
   for LEntry in FFlavorEntries do
     LEntry.Free;
   for LEggGroup in FEggGroups do
     LEggGroup.Free;
+  for LVariety in FVarieties do
+    LVariety.Free;
   FreeAndNil(FEvolutionChain);
   FreeAndNil(FColor);
   FreeAndNil(FGeneration);

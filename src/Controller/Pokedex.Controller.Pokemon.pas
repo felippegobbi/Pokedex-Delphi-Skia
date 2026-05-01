@@ -4,6 +4,9 @@ interface
 
 uses
   Pokedex.Model.Pokemon,
+  Pokedex.Service.Interfaces,
+  Pokedex.Service.Storage,
+  Pokedex.Constants,
   REST.Json,
   System.SysUtils,
   Winapi.Windows,
@@ -11,22 +14,16 @@ uses
   System.UITypes,
   VCL.Graphics,
   System.Generics.Collections,
-  System.Generics.Defaults,
-  Pokedex.Service.Interfaces;
+  System.Generics.Defaults;
 
 type
   TPokemonController = class
   private
     FService: IPokemonService;
-    FHistory: TStringList;
-    FFavorites: TStringList;
+    FStorage: TStorageService;
     class var FTypeColors: TDictionary<string, TColor>;
     class var FSpeciesColors: TDictionary<string, TColor>;
     class procedure InitializeColorMaps;
-    procedure LoadHistory;
-    procedure SaveHistory;
-    procedure LoadFavorites;
-    procedure SaveFavorites;
     class constructor Create;
     class destructor Destroy;
 
@@ -70,10 +67,7 @@ type
     ALL_TYPES: array [0 .. 17] of string = ('normal', 'fire', 'water', 'electric',
       'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
       'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy');
-    HISTORY_FILE = 'recent_searches.txt';
-    FAVORITES_FILE = 'favorites.txt';
     BLACK_COLOR = $002C2C2C;
-    POKEMON_MAX_ID = 1025;
     BLUE_COLOR = $00F09068;
     BROWN_COLOR = $005090A8;
     GRAY_COLOR = $00A8A8A8;
@@ -91,11 +85,7 @@ uses
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
   System.NetEncoding,
-  System.Json,
-  System.IOUtils;
-
-const
-  HTTP_TIMEOUT_MS = 10000;
+  System.Json;
 
 class constructor TPokemonController.Create;
 begin
@@ -105,119 +95,38 @@ end;
 constructor TPokemonController.Create(const AService: IPokemonService);
 begin
   FService := AService;
-  FHistory := TStringList.Create;
-  FHistory.Duplicates := dupIgnore;
-  FHistory.Sorted := False;
-  FFavorites := TStringList.Create;
-  LoadHistory;
-  LoadFavorites;
+  FStorage := TStorageService.Create;
 end;
 
 destructor TPokemonController.Destroy;
 begin
-  SaveHistory;
-  SaveFavorites;
-  FHistory.Free;
-  FFavorites.Free;
+  FStorage.Free;
   inherited;
 end;
 
-procedure TPokemonController.LoadFavorites;
-var
-  LPath: string;
-begin
-  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), FAVORITES_FILE);
-  if TFile.Exists(LPath) then
-    FFavorites.LoadFromFile(LPath);
-end;
-
-procedure TPokemonController.SaveFavorites;
-var
-  LPath: string;
-begin
-  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), FAVORITES_FILE);
-  try
-    FFavorites.SaveToFile(LPath);
-  except
-    // Silent fail
-  end;
-end;
-
 procedure TPokemonController.ToggleFavorite(const AId: Integer);
-var
-  LIdx: Integer;
-  LStrId: string;
 begin
-  LStrId := AId.ToString;
-  LIdx := FFavorites.IndexOf(LStrId);
-  if LIdx >= 0 then
-    FFavorites.Delete(LIdx)
-  else
-    FFavorites.Add(LStrId);
-  SaveFavorites;
+  FStorage.ToggleFavorite(AId);
 end;
 
 function TPokemonController.IsFavorite(const AId: Integer): Boolean;
 begin
-  Result := FFavorites.IndexOf(AId.ToString) >= 0;
+  Result := FStorage.IsFavorite(AId);
 end;
 
 function TPokemonController.GetFavorites: TArray<string>;
-var
-  I: Integer;
 begin
-  SetLength(Result, FFavorites.Count);
-  for I := 0 to FFavorites.Count - 1 do
-    Result[I] := FFavorites[I];
-end;
-
-procedure TPokemonController.LoadHistory;
-var
-  LPath: string;
-begin
-  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), HISTORY_FILE);
-  if TFile.Exists(LPath) then
-    FHistory.LoadFromFile(LPath);
-end;
-
-procedure TPokemonController.SaveHistory;
-var
-  LPath: string;
-begin
-  LPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), HISTORY_FILE);
-  try
-    FHistory.SaveToFile(LPath);
-  except
-    // Silent fail if cannot save history
-  end;
+  Result := FStorage.GetFavorites;
 end;
 
 procedure TPokemonController.AddToHistory(const ASearch: string);
-var
-  LIdx: Integer;
 begin
-  if ASearch.Trim.IsEmpty then
-    Exit;
-
-  LIdx := FHistory.IndexOf(ASearch.ToLower);
-  if LIdx >= 0 then
-    FHistory.Delete(LIdx);
-
-  FHistory.Insert(0, ASearch.ToLower);
-
-  while FHistory.Count > 10 do
-    FHistory.Delete(FHistory.Count - 1);
-
-  SaveHistory;
+  FStorage.AddToHistory(ASearch);
 end;
 
 function TPokemonController.GetHistory: TArray<string>;
-var
-  I: Integer;
 begin
-  SetLength(Result, FHistory.Count);
-  for I := 0 to FHistory.Count - 1 do
-    Result[I] := FHistory[I];
+  Result := FStorage.GetHistory;
 end;
 
 class destructor TPokemonController.Destroy;
@@ -288,9 +197,7 @@ var
     LNode.Name := LSpecies.GetValue<string>('name');
     LNode.PokemonId := StrToIntDef(LParts[High(LParts)], 0);
     LNode.IsActive := False;
-    LNode.SpriteUrl :=
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
-      + LNode.PokemonId.ToString + '.png';
+    LNode.SpriteUrl := SPRITES_BASE + LNode.PokemonId.ToString + '.png';
     LNode.Stage := AStage;
     LNode.ParentId := AParentId;
 
@@ -725,8 +632,7 @@ end;
 
 class function TPokemonController.GetCryUrl(const AId: Integer): string;
 begin
-  Result := 'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/'
-    + AId.ToString + '.ogg';
+  Result := CRIES_BASE + AId.ToString + '.ogg';
 end;
 
 class function TPokemonController.CapitalizeDisplayName(const AName: string;
@@ -934,8 +840,7 @@ begin
     for I := 0 to High(ATypeNames) do
     begin
       try
-        LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/type/' +
-          LowerCase(ATypeNames[I]));
+        LJson := FService.GetTypeJSON(POKEAPI_TYPE + LowerCase(ATypeNames[I]));
         LRoot := TJSONObject.ParseJSONValue(LJson);
         if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
         begin
@@ -1006,57 +911,10 @@ begin
 end;
 
 function TPokemonController.GetAbilityDescription(const AName, ALang: string): string;
-var
-  LJson: string;
-  LRoot: TJSONValue;
-  LObj: TJSONObject;
-  LArr: TJSONArray;
-  LEntry, LLangObj: TJSONValue;
-  LTargetLang, LBackupEn: string;
 begin
-  Result := '';
   if AName.IsEmpty then
-    Exit;
-  if ALang.IsEmpty then
-    LTargetLang := 'en'
-  else
-    LTargetLang := ALang;
-  try
-    LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/ability/' +
-      LowerCase(AName));
-    LRoot := TJSONObject.ParseJSONValue(LJson);
-    if not(Assigned(LRoot) and (LRoot is TJSONObject)) then
-    begin
-      if Assigned(LRoot) then
-        LRoot.Free;
-      Exit;
-    end;
-    LObj := TJSONObject(LRoot);
-    try
-      LArr := TJSONArray(LObj.GetValue('flavor_text_entries'));
-      if not Assigned(LArr) then
-        Exit;
-      LBackupEn := '';
-      for LEntry in LArr do
-        if LEntry is TJSONObject then
-        begin
-          LLangObj := TJSONObject(LEntry).GetValue('language');
-          if not(Assigned(LLangObj) and (LLangObj is TJSONObject)) then
-            Continue;
-          if TJSONObject(LLangObj).GetValue<string>('name') = LTargetLang then
-            Result := TJSONObject(LEntry).GetValue<string>('flavor_text')
-          else if TJSONObject(LLangObj).GetValue<string>('name') = 'en' then
-            LBackupEn := TJSONObject(LEntry).GetValue<string>('flavor_text');
-        end;
-      if Result.IsEmpty then
-        Result := LBackupEn;
-      Result := Result.Replace(#10, ' ').Replace(#12, ' ').Replace(#13, ' ');
-    finally
-      LObj.Free;
-    end;
-  except
-    Result := '';
-  end;
+    Exit('');
+  Result := GetAbilityDescriptionByUrl(POKEAPI_ABILITY + LowerCase(AName), ALang);
 end;
 
 function TPokemonController.GetAbilityDescriptionByUrl(const AUrl,
@@ -1177,7 +1035,7 @@ begin
     LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
     LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
     try
-      LUrl := 'https://api.mymemory.translated.net/get?q=' +
+      LUrl := MYMEMORY_URL + '?q=' +
         TNetEncoding.URL.Encode(AText.Trim) + '&langpair=en|' + AToLang;
       LRoot := TJSONObject.ParseJSONValue(LHttp.Get(LUrl).ContentAsString);
       if Assigned(LRoot) and (LRoot is TJSONObject) then
@@ -1233,8 +1091,7 @@ begin
     Exit;
   try
     try
-      LJson := FService.GetTypeJSON('https://pokeapi.co/api/v2/type/' +
-        LowerCase(ATypeName.Trim));
+      LJson := FService.GetTypeJSON(POKEAPI_TYPE + LowerCase(ATypeName.Trim));
     except
       Exit;
     end;

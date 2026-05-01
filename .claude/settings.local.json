@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell *)",
+      "Bash(unix2dos \"C:/Programação/Delphi/Pokedex/src/View/Pokedex.View.EvolutionPanel.pas\")",
+      "Bash(unix2dos \"C:/Programação/Delphi/Pokedex/src/Service/Pokedex.Service.API.pas\")",
+      "Bash(unix2dos \"C:/Programação/Delphi/Pokedex/src/Service/Pokedex.Service.API.dfm\")",
+      "Bash(unix2dos C:/Programação/Delphi/Pokedex/src/Model/Pokedex.Model.Pokemon.pas C:/Programação/Delphi/Pokedex/src/Service/Pokedex.Service.Interfaces.pas)",
+      "Bash(unix2dos C:/Programação/Delphi/Pokedex/src/View/Pokedex.View.EvolutionPanel.pas C:/Programação/Delphi/Pokedex/src/Model/Pokedex.Model.Pokemon.pas)",
+      "Bash(grep -rn \"//\" \"C:/Programação/Delphi/Pokedex/src\" --include=\"*.pas\")",
+      "Bash(grep -v \"\\\\.pas:[0-9]*:.*'.*//.*'\")",
+      "Bash(grep -v \"begin$\\\\|end$\\\\|var$\")",
+      "Bash(grep \"^\\\\s*//\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'feat\\(v5\\): Sprint 1 — Shiny sprite toggle' --body ' *)",
+      "Bash(where gh *)",
+      "Bash(winget list *)",
+      "Bash(git pull *)",
+      "Bash(git commit -m 'fix: replace case-on-string with if/else in GetPreferredLanguage *)",
+      "Bash(gh pr create --title 'feat\\(5.1.0\\): Sprint 2 — random button, locale flavor text, responsive evolution panel' --body ' *)",
+      "Bash(unix2dos src/View/Pokedex.View.TypeChart.pas)",
+      "Bash(python -c ' *)",
+      "PowerShell(cd \"C:\\\\Programação\\\\Delphi\\\\Pokedex\"; $msbuild = \"C:\\\\Program Files \\(x86\\)\\\\Embarcadero\\\\Studio\\\\23.0\\\\bin\\\\rsvars.bat\"; $result = cmd /c \"`\"$msbuild`\" && msbuild Pokedex.dproj /t:Build /p:Config=Debug /p:Platform=Win32 /v:minimal 2>&1\" | Select-String -Pattern \"error|Error|fatal|Fatal|warning|succeeded|failed\" | Select-Object -First 20; $result)",
+      "Bash(python3 *)",
+      "PowerShell(foreach \\($f in @\\(\"src\\\\View\\\\Pokedex.View.Main.pas\",\"src\\\\View\\\\Pokedex.View.TypeChart.pas\",\"src\\\\Controller\\\\Pokedex.Controller.Pokemon.pas\"\\)\\) { $path = \"C:\\\\Programação\\\\Delphi\\\\Pokedex\\\\$f\"; $bytes = [System.IO.File]::ReadAllBytes\\($path\\); $text = [System.Text.Encoding]::UTF8.GetString\\($bytes\\); $text = $text -replace \"`r`n\",\"`n\" -replace \"`r\",\"`n\" -replace \"`n\",\"`r`n\"; [System.IO.File]::WriteAllText\\($path, $text, [System.Text.Encoding]::UTF8\\) }; \"CRLF ok\")",
+      "Bash(rtk git *)",
+      "Bash(rtk gh *)",
+      "Bash(rtk grep *)"
+    ]
+  }
+}

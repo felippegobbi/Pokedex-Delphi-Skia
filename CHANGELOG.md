@@ -16,6 +16,29 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 ## V6 Sprint Map / Mapa de Sprints V6
 
 - `Sprint 1` → `feat(6.0.0): Sprint 1 - Abilities & Species Depth`
+- `Sprint 2` → `feat(6.1.0): Sprint 2 - Alternate Forms, BST Bar & Legendary Badge`
+
+## [6.1.0] - 2026-04-27
+
+### Added / Adicionado
+
+- **Alternate forms selector**: Pokémon with multiple varieties (Mega evolutions, regional forms, Rotom appliances, etc.) now display form chips at the bottom of the left panel. Clicking a chip navigates directly to that form without typing.
+- **Seletor de formas alternativas**: Pokémon com múltiplas variedades (Mega evoluções, formas regionais, eletrodomésticos do Rotom, etc.) exibem chips de forma na parte inferior do painel esquerdo. Clicar em um chip navega diretamente para aquela forma sem precisar digitar.
+
+- **BST visual bar**: The `TOTAL` row in the stats tab now shows a proportional bar (normalized to 780 — Mega Mewtwo Y ceiling), giving instant visual context for a Pokémon's overall power.
+- **Barra visual de BST**: A linha `TOTAL` na aba de stats agora exibe uma barra proporcional (normalizada para 780 — limite do Mega Mewtwo Y), fornecendo contexto visual instantâneo do poder total do Pokémon.
+
+- **Legendary/Mythical badge**: Legendary Pokémon show a gold `LENDÁRIO` badge, and Mythical Pokémon show a purple `MÍTICO` badge in the stats panel, between the generation row and abilities.
+- **Badge Lendário/Mítico**: Pokémon lendários exibem o badge dourado `LENDÁRIO`, e Pokémon míticos exibem o badge roxo `MÍTICO` no painel de stats, entre a linha de geração e as habilidades.
+
+### Technical / Técnico
+
+- **Model**: `TPokemonSpecies` gains `is_legendary`, `is_mythical` (Booleans) and `varieties` (`TArray<TPokemonVariety>`); new `TPokemonVariety` class maps each variety entry.
+- **Modelo**: `TPokemonSpecies` ganha `is_legendary`, `is_mythical` (Booleanos) e `varieties` (`TArray<TPokemonVariety>`); nova classe `TPokemonVariety` mapeia cada entrada de variedade.
+- **StatsPanel**: New `LoadSpeciesFlags` method; BST bar drawn inline after TOTAL label; badge drawn as a chip below generation.
+- **StatsPanel**: Novo método `LoadSpeciesFlags`; barra BST desenhada inline após o label TOTAL; badge desenhado como chip abaixo da geração.
+- **View**: `FFormChips: TSkPaintBox` anchored to the bottom of the left panel; `UpdateFormChips`, `DrawFormChips`, `FormChipsMouseDown` drive the form selector; `FCurrentPokemonName` tracks active form for chip highlighting.
+- **View**: `FFormChips: TSkPaintBox` ancorado ao fundo do painel esquerdo; `UpdateFormChips`, `DrawFormChips`, `FormChipsMouseDown` gerenciam o seletor de formas; `FCurrentPokemonName` rastreia a forma ativa para destaque dos chips.
 
 ## [6.0.0] - 2026-04-25
 

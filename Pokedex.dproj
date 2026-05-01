@@ -124,6 +124,9 @@
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <Icon_MainIcon>Pokedex_Icon.ico</Icon_MainIcon>
+        <UWP_DelphiLogo44>assets\Pokedex_Icon.png</UWP_DelphiLogo44>
+        <UWP_DelphiLogo150>assets\Pokedex_Icon.png</UWP_DelphiLogo150>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
@@ -140,6 +143,8 @@
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
         <DCCReference Include="src\Service\Pokedex.Service.Interfaces.pas"/>
+        <DCCReference Include="src\Pokedex.Constants.pas"/>
+        <DCCReference Include="src\Service\Pokedex.Service.Storage.pas"/>
         <DCCReference Include="src\View\Pokedex.View.EvolutionPanel.pas"/>
         <DCCReference Include="src\View\Pokedex.View.Main.pas">
             <Form>PokedexView</Form>

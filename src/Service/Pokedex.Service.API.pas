@@ -7,7 +7,8 @@ uses
   System.Classes,
   System.Net.HttpClientComponent,
   System.Net.HttpClient,
-  Pokedex.Service.Interfaces;
+  Pokedex.Service.Interfaces,
+  Pokedex.Constants;
 
 type
   TdmPokeService = class(TDataModule, IPokemonService)
@@ -29,9 +30,6 @@ implementation
 {%CLASSGROUP 'Vcl.Controls.TControl'}
 {$R *.dfm}
 
-const
-  BASE_URL = 'https://pokeapi.co/api/v2';
-  HTTP_TIMEOUT_MS = 10000;
 
 function TdmPokeService.DoGet(const AUrl: string): string;
 var
@@ -61,7 +59,7 @@ end;
 
 function TdmPokeService.GetPokemonJSON(const AIdOrName: string): string;
 begin
-  Result := DoGet(BASE_URL + '/pokemon/' + LowerCase(Trim(AIdOrName)));
+  Result := DoGet(POKEAPI_POKEMON + LowerCase(Trim(AIdOrName)));
 end;
 
 function TdmPokeService.GetSpeciesJSON(const AUrl: string): string;
@@ -81,8 +79,7 @@ end;
 
 function TdmPokeService.GetEncountersJSON(const AIdOrName: string): string;
 begin
-  Result := DoGet(BASE_URL + '/pokemon/' + LowerCase(Trim(AIdOrName)) +
-    '/encounters');
+  Result := DoGet(POKEAPI_POKEMON + LowerCase(Trim(AIdOrName)) + '/encounters');
 end;
 
 end.

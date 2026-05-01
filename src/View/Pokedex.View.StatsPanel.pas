@@ -62,6 +62,8 @@ type
     FEncounterSections: TArray<TEncounterSection>;
     FDefenseNote: string;
     FBST: Integer;
+    FIsLegendary: Boolean;
+    FIsMythical: Boolean;
     FActiveTab: TStatsTab;
     FTabsRect: array[TStatsTab] of TRectF;
     FActiveMoveTab: TMoveTab;
@@ -74,6 +76,9 @@ type
     FLocationsLoading: Boolean;
     FLocationsPage: Integer;
     FLocationPageRects: TArray<TRectF>;
+    FStatsScrollOffset: Integer;
+    FStatsContentHeight: Integer;
+    FStatsContentRect: TRectF;
     FOnMovesTabRequested: TNotifyEvent;
     FOnLocationsTabRequested: TNotifyEvent;
     FOnInteract: TNotifyEvent;
@@ -119,6 +124,7 @@ type
     procedure LoadAbilityDescription(const AText: string);
     procedure LoadSpeciesExtra(const AGeneration, AHabitat,
       APastTypes: string);
+    procedure LoadSpeciesFlags(const AIsLegendary, AIsMythical: Boolean);
     procedure LoadEffects(const ADefensiveEffects: TArray<TTypeEffect>;
       const ADefenseNote: string = '');
     procedure ResetMovePool;
@@ -160,6 +166,9 @@ const
   TAB_GAP = 10;
   DARK_BG: TAlphaColor = $FF2A2A2A;
   STATS_FONT_SIZE = 9.5;
+  RANGE50_W = 54;
+  RANGE100_W = 62;
+  RANGE_GAP = 5;
   FLAVOR_OPTION_H = 22;
   FLAVOR_MAX_VISIBLE = 6;
   LOCATIONS_PER_PAGE = 8;
@@ -190,6 +199,8 @@ begin
   FHabitat := '';
   FPastTypes := '';
   FDefenseNote := '';
+  FIsLegendary := False;
+  FIsMythical := False;
   FActiveTab := stStats;
   FActiveMoveTab := mtLevelUp;
   FMovePage[mtLevelUp] := 0;
@@ -198,6 +209,9 @@ begin
   SetLength(FMovePageRects, 0);
   FMovesLoaded := False;
   FMovesLoading := False;
+  FStatsScrollOffset := 0;
+  FStatsContentHeight := 0;
+  FStatsContentRect := TRectF.Empty;
   SetLength(FStats, 0);
   SetLength(FDefensiveEffects, 0);
   SetLength(FMovePool, 0);
@@ -217,6 +231,7 @@ begin
   for I := 0 to High(AStats) do
     Inc(FBST, AStats[I].Value);
   FActiveTab := stStats;
+  FStatsScrollOffset := 0;
   Redraw;
 end;
 
@@ -301,6 +316,13 @@ begin
   FGeneration := AGeneration;
   FHabitat := AHabitat;
   FPastTypes := APastTypes;
+  Redraw;
+end;
+
+procedure TStatsPanel.LoadSpeciesFlags(const AIsLegendary, AIsMythical: Boolean);
+begin
+  FIsLegendary := AIsLegendary;
+  FIsMythical := AIsMythical;
   Redraw;
 end;
 
@@ -596,17 +618,19 @@ end;
 procedure TStatsPanel.DrawStatsTab(const ACanvas: ISkCanvas;
   const APanelRect: TRectF);
 var
-  LCount, I, J, LRowCount, LRowEnd, LBadgeIdx,
+  LCount, I, J, LRowCount, LRowEnd, LBadgeIdx, LEffectCol,
+    LEffectColCount,
     LVisibleFlavorCount, LFlavorIdx, LFlavorMaxOffset: Integer;
-  LBarBg, LBarFill, LBadgeRect, LDividerRect, LDropdownListRect,
+  LBarBg, LBarFill, LBadgeRect, LDropdownListRect,
     LScrollTrackRect, LScrollThumbRect: TRectF;
   LPaint: ISkPaint;
   LStat: TPokemonStat;
   LEffect: TTypeEffect;
   LBarLeft, LBarRight, LBarTop, LRowTop, LFillX: Single;
   LY, LLayoutW, LX, LBadgeW, LBadgeMidY, LThumbHeight, LThumbTop: Single;
-  LLabelW, LRowBaseW, LRowTotalW, LThisW: Single;
-  LIsFirstRow: Boolean;
+  LRowTotalW, LThisW: Single;
+  LEffectColW, LEffectColGap, LEffectGroupLeft, LEffectGroupY,
+    LEffectRowTop, LEffectGroupH, LEffectMaxGroupH, LDrawBadgeW: Single;
   LTColor: TColor;
   LBadgeLabels: TArray<string>;
   LBadgeWidths: TArray<Single>;
@@ -622,8 +646,10 @@ begin
   if LCount = 0 then
     Exit;
 
+  ACanvas.Save;
+  ACanvas.ClipRect(APanelRect);
   LLayoutW := APanelRect.Width - 40;
-  LY := APanelRect.Top;
+  LY := APanelRect.Top - FStatsScrollOffset;
   LBarLeft := APanelRect.Left + LABEL_W + 8;
   LBarRight := APanelRect.Right - VAL_W - 6;
 
@@ -657,23 +683,30 @@ begin
     LP.Paint(ACanvas, APanelRect.Right - VAL_W, LRowTop + (ROW_H - LP.Height) / 2);
   end;
 
-  LRowTop := LY + LCount * ROW_H + 2;
+  LRowTop := LY + LCount * ROW_H + 4;
   LP := MakeParagraph('TOTAL', STATS_FONT_SIZE, $55FFFFFF, True, False,
     TSkTextAlign.Left, 1);
   LP.Layout(LABEL_W);
-  LP.Paint(ACanvas, APanelRect.Left, LRowTop);
+  LP.Paint(ACanvas, APanelRect.Left, LRowTop + (ROW_H - LP.Height) / 2);
   LP := MakeParagraph(FBST.ToString, STATS_FONT_SIZE, FBarColor, True, False,
     TSkTextAlign.Right, 1);
   LP.Layout(VAL_W + 4);
-  LP.Paint(ACanvas, APanelRect.Right - VAL_W - 4, LRowTop);
-
-  LY := LY + LCount * ROW_H + 20;
-  LPaint.Style := TSkPaintStyle.Stroke;
-  LPaint.StrokeWidth := 1;
+  LP.Paint(ACanvas, APanelRect.Right - VAL_W - 4, LRowTop + (ROW_H - LP.Height) / 2);
+  // BST visual bar (normalized to 780 — Mega Mewtwo Y ceiling)
+  LBarTop := LRowTop + (ROW_H - BAR_H) / 2;
+  LBarBg := TRectF.Create(LBarLeft, LBarTop, LBarRight, LBarTop + BAR_H);
+  LPaint.Style := TSkPaintStyle.Fill;
   LPaint.Color := $22FFFFFF;
-  ACanvas.DrawLine(TPointF.Create(APanelRect.Left + 16, LY),
-    TPointF.Create(APanelRect.Right - 16, LY), LPaint);
-  LY := LY + 12;
+  ACanvas.DrawRoundRect(LBarBg, BAR_R, BAR_R, LPaint);
+  LFillX := LBarLeft + (LBarRight - LBarLeft) * Min(1.0, FBST / 780.0);
+  if LFillX > LBarLeft then
+  begin
+    LBarFill := TRectF.Create(LBarLeft, LBarTop, LFillX, LBarTop + BAR_H);
+    LPaint.Color := FBarColor and $99FFFFFF;
+    ACanvas.DrawRoundRect(LBarFill, BAR_R, BAR_R, LPaint);
+  end;
+
+  LY := LY + LCount * ROW_H + 24;
 
   LP := MakeParagraph('PESO', STATS_FONT_SIZE, $88FFFFFF, True, False,
     TSkTextAlign.Left, 1);
@@ -702,7 +735,41 @@ begin
   LP.Layout(LLayoutW);
   LP.Paint(ACanvas, APanelRect.Left + 20, LY);
 
-  LY := LY + 20;
+  LY := LY + 16;
+
+  if FIsLegendary or FIsMythical then
+  begin
+    var LBadgeText: string;
+    var LBadgeColor: TAlphaColor;
+    if FIsMythical then
+    begin
+      LBadgeText := 'MÍTICO';
+      LBadgeColor := $FFCC55FF;
+    end
+    else
+    begin
+      LBadgeText := 'LENDÁRIO';
+      LBadgeColor := $FFFFCC00;
+    end;
+    LP := MakeParagraph(LBadgeText, STATS_FONT_SIZE, LBadgeColor, True, False,
+      TSkTextAlign.Center, 1);
+    LP.Layout(APanelRect.Width);
+    var LBadgeW2: Single := LP.LongestLine + 20;
+    var LBadgeX: Single := APanelRect.Left + (APanelRect.Width - LBadgeW2) / 2;
+    var LBadgeRect2: TRectF := TRectF.Create(LBadgeX, LY, LBadgeX + LBadgeW2,
+      LY + 18);
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Color := LBadgeColor and $25FFFFFF;
+    ACanvas.DrawRoundRect(LBadgeRect2, 5, 5, LPaint);
+    LPaint.Style := TSkPaintStyle.Stroke;
+    LPaint.StrokeWidth := 1;
+    LPaint.Color := LBadgeColor and $66FFFFFF;
+    ACanvas.DrawRoundRect(LBadgeRect2, 5, 5, LPaint);
+    LP.Paint(ACanvas, APanelRect.Left, LY + (18 - LP.Height) / 2);
+    LY := LY + 24;
+  end
+  else
+    LY := LY + 4;
 
   if Length(FAbilityNames) > 0 then
   begin
@@ -933,6 +1000,19 @@ begin
     LP.Paint(ACanvas, APanelRect.Left, LY);
     LY := LY + LP.Height + 6;
 
+    if APanelRect.Width >= 330 then
+      LEffectColCount := 3
+    else if APanelRect.Width >= 220 then
+      LEffectColCount := 2
+    else
+      LEffectColCount := 1;
+    LEffectColGap := 8;
+    LEffectColW := (APanelRect.Width - (LEffectColGap *
+      (LEffectColCount - 1))) / LEffectColCount;
+    LEffectCol := 0;
+    LEffectRowTop := LY;
+    LEffectMaxGroupH := 0;
+
     for I := 0 to High(MULT_LABELS) do
     begin
       SetLength(LBadgeLabels, 0);
@@ -959,70 +1039,82 @@ begin
       if Length(LBadgeLabels) = 0 then
         Continue;
 
-      LLabelW := 34;
+      LEffectGroupLeft := APanelRect.Left + (LEffectCol * (LEffectColW +
+        LEffectColGap));
+      LEffectGroupY := LEffectRowTop;
+      LP := MakeParagraph(MULT_LABELS[I], STATS_FONT_SIZE, FBarColor, True,
+        False, TSkTextAlign.Center, 1);
+      LP.Layout(LEffectColW);
+      LP.Paint(ACanvas, LEffectGroupLeft, LEffectGroupY);
+      LEffectGroupY := LEffectGroupY + LP.Height + 4;
+
       LBadgeIdx := 0;
-      LIsFirstRow := True;
       while LBadgeIdx <= High(LBadgeLabels) do
       begin
-        LRowBaseW := 0;
-        if LIsFirstRow then
-          LRowBaseW := LLabelW + 4;
-        LRowTotalW := LRowBaseW;
+        // Measure how many badges fit inside this responsive column.
+        LRowTotalW := 0;
         LRowCount := 0;
         J := LBadgeIdx;
         while J <= High(LBadgeLabels) do
         begin
-          LThisW := LBadgeWidths[J];
+          LThisW := Min(LBadgeWidths[J], LEffectColW);
           if LRowCount > 0 then
             LThisW := LThisW + 4;
-          if (LRowTotalW + LThisW > APanelRect.Width) and (LRowCount > 0) then
+          if (LRowTotalW + LThisW > LEffectColW) and (LRowCount > 0) then
             Break;
           LRowTotalW := LRowTotalW + LThisW;
           Inc(LRowCount);
           Inc(J);
         end;
         if LRowCount = 0 then
-        begin
-          LRowTotalW := LRowBaseW + LBadgeWidths[LBadgeIdx];
           LRowCount := 1;
-        end;
         LRowEnd := LBadgeIdx + LRowCount - 1;
 
-        LX := APanelRect.Left + (APanelRect.Width - LRowTotalW) / 2;
-        if LX < APanelRect.Left then
-          LX := APanelRect.Left;
-
-        if LIsFirstRow then
-        begin
-          LP := MakeParagraph(MULT_LABELS[I], STATS_FONT_SIZE, FBarColor, True,
-            False, TSkTextAlign.Left, 1);
-          LP.Layout(LLabelW);
-          LP.Paint(ACanvas, LX, LY + 1);
-          LX := LX + LLabelW + 4;
-        end;
-
+        LX := LEffectGroupLeft + (LEffectColW - LRowTotalW) / 2;
+        if LX < LEffectGroupLeft then
+          LX := LEffectGroupLeft;
         for J := LBadgeIdx to LRowEnd do
         begin
           if J > LBadgeIdx then
             LX := LX + 4;
-          LBadgeRect := TRectF.Create(LX, LY + 2, LX + LBadgeWidths[J], LY + 18);
+          LDrawBadgeW := Min(LBadgeWidths[J], LEffectColW);
+          LBadgeRect := TRectF.Create(LX, LEffectGroupY, LX + LDrawBadgeW,
+            LEffectGroupY + 16);
           LPaint.Style := TSkPaintStyle.Fill;
           LPaint.Color := LBadgeColors[J];
-          ACanvas.DrawRoundRect(LBadgeRect, 3.5, 3.5, LPaint);
-          LP := MakeParagraph(LBadgeLabels[J], STATS_FONT_SIZE, $FFFFFFFF,
-            True, False, TSkTextAlign.Left, 1);
-          LP.Layout(Max(20.0, LBadgeWidths[J]));
+          ACanvas.DrawRoundRect(LBadgeRect, 4, 4, LPaint);
+          LP := MakeParagraph(LBadgeLabels[J], STATS_FONT_SIZE - 0.5, $FFFFFFFF,
+            True, False, TSkTextAlign.Center, 1);
+          LP.Layout(Max(20.0, LDrawBadgeW));
           LBadgeMidY := (LBadgeRect.Top + LBadgeRect.Bottom) / 2;
-          LP.Paint(ACanvas, LX + 6, LBadgeMidY - LP.Height / 2);
-          LX := LX + LBadgeWidths[J];
+          LP.Paint(ACanvas, LX, LBadgeMidY - LP.Height / 2);
+          LX := LX + LDrawBadgeW;
         end;
 
         LBadgeIdx := LBadgeIdx + LRowCount;
-        LIsFirstRow := False;
-        LY := LY + 22;
+        LEffectGroupY := LEffectGroupY + 20;
+      end;
+
+      LEffectGroupH := LEffectGroupY - LEffectRowTop;
+      if LEffectGroupH > LEffectMaxGroupH then
+        LEffectMaxGroupH := LEffectGroupH;
+
+      Inc(LEffectCol);
+      if LEffectCol >= LEffectColCount then
+      begin
+        LEffectCol := 0;
+        LEffectRowTop := LEffectRowTop + LEffectMaxGroupH + 8;
+        LEffectMaxGroupH := 0;
       end;
     end;
+
+    if LEffectCol = 0 then
+      LY := LEffectRowTop
+    else
+      LY := LEffectRowTop + LEffectMaxGroupH + 2;
   end;
+
+  FStatsContentHeight := Round(LY - APanelRect.Top + FStatsScrollOffset);
 
   if FFlavorDropdownOpen and (Length(FFlavorLabels) > 1) then
   begin
@@ -1097,6 +1189,7 @@ begin
     end;
   end;
 
+  ACanvas.Restore;
 end;
 
 procedure TStatsPanel.DrawMovesTab(const ACanvas: ISkCanvas;
@@ -1213,7 +1306,6 @@ begin
           LColumnW := APanelRect.Width;
       end;
       LPageCount := 1;
-      LCurrentPage := 0;
       SetLength(FMovePageRects, 0);
       LStartIndex := 0;
       LEndIndex := High(LSection.Moves);
@@ -1507,6 +1599,7 @@ begin
 
   LContentRect := TRectF.Create(LPanelRect.Left + 12, LPanelRect.Top + 12 + TAB_H
     + 12, LPanelRect.Right - 12, LPanelRect.Bottom - 12);
+  FStatsContentRect := LContentRect;
 
   if FActiveTab = stStats then
     DrawStatsTab(ACanvas, LContentRect)
@@ -1514,6 +1607,25 @@ begin
     DrawMovesTab(ACanvas, LContentRect)
   else
     DrawLocationsTab(ACanvas, LContentRect);
+
+  // Scroll indicator (stats tab only)
+  if (FActiveTab = stStats) and (FStatsContentHeight > Round(LContentRect.Height)) then
+  begin
+    var LTrackX: Single := LPanelRect.Right - 6;
+    var LTrackTop: Single := LContentRect.Top + 4;
+    var LTrackBot: Single := LContentRect.Bottom - 4;
+    var LTrackH: Single := LTrackBot - LTrackTop;
+    LPaint.Style := TSkPaintStyle.Fill;
+    LPaint.Color := $18FFFFFF;
+    ACanvas.DrawRoundRect(TRectF.Create(LTrackX, LTrackTop, LTrackX + 3, LTrackBot),
+      1.5, 1.5, LPaint);
+    var LThumbH: Single := Max(16.0, LTrackH * (LContentRect.Height / FStatsContentHeight));
+    var LMaxOff: Single := FStatsContentHeight - LContentRect.Height;
+    var LThumbTop: Single := LTrackTop + (LTrackH - LThumbH) * (FStatsScrollOffset / LMaxOff);
+    LPaint.Color := $66FFFFFF;
+    ACanvas.DrawRoundRect(TRectF.Create(LTrackX, LThumbTop, LTrackX + 3, LThumbTop + LThumbH),
+      1.5, 1.5, LPaint);
+  end;
 end;
 
 procedure TStatsPanel.HandleMouseDown(Sender: TObject; Button: TMouseButton;
@@ -1648,32 +1760,44 @@ var
   LDropdownListRect: TRectF;
   LMaxOffset: Integer;
 begin
-  if (not FFlavorDropdownOpen) or (FActiveTab <> stStats) or
-    (Length(FFlavorLabels) <= FLAVOR_MAX_VISIBLE) then
+  if FActiveTab <> stStats then
     Exit;
 
-  LClientPoint := ScreenToClient(MousePos);
-  LPoint := TPointF.Create(LClientPoint.X, LClientPoint.Y);
-  LVisibleFlavorCount := Min(FLAVOR_MAX_VISIBLE, Length(FFlavorLabels));
-  LDropdownListRect := TRectF.Create(FFlavorDropdownRect.Left,
-    FFlavorDropdownRect.Bottom + 4, FFlavorDropdownRect.Right,
-    FFlavorDropdownRect.Bottom + 8 + (LVisibleFlavorCount * FLAVOR_OPTION_H));
+  if FFlavorDropdownOpen and (Length(FFlavorLabels) > FLAVOR_MAX_VISIBLE) then
+  begin
+    LClientPoint := ScreenToClient(MousePos);
+    LPoint := TPointF.Create(LClientPoint.X, LClientPoint.Y);
+    LVisibleFlavorCount := Min(FLAVOR_MAX_VISIBLE, Length(FFlavorLabels));
+    LDropdownListRect := TRectF.Create(FFlavorDropdownRect.Left,
+      FFlavorDropdownRect.Bottom + 4, FFlavorDropdownRect.Right,
+      FFlavorDropdownRect.Bottom + 8 + (LVisibleFlavorCount * FLAVOR_OPTION_H));
 
-  if not(FFlavorDropdownRect.Contains(LPoint) or LDropdownListRect.Contains(LPoint))
-  then
+    if FFlavorDropdownRect.Contains(LPoint) or LDropdownListRect.Contains(LPoint) then
+    begin
+      LMaxOffset := Max(0, Length(FFlavorLabels) - LVisibleFlavorCount);
+      if WheelDelta < 0 then
+        FFlavorScrollOffset := Min(LMaxOffset, FFlavorScrollOffset + 1)
+      else if WheelDelta > 0 then
+        FFlavorScrollOffset := Max(0, FFlavorScrollOffset - 1);
+      Handled := True;
+      Redraw;
+    end;
     Exit;
+  end;
 
-  LMaxOffset := Max(0, Length(FFlavorLabels) - LVisibleFlavorCount);
-  if LMaxOffset = 0 then
-    Exit;
-
-  if WheelDelta < 0 then
-    FFlavorScrollOffset := Min(LMaxOffset, FFlavorScrollOffset + 1)
-  else if WheelDelta > 0 then
-    FFlavorScrollOffset := Max(0, FFlavorScrollOffset - 1);
-
-  Handled := True;
-  Redraw;
+  if not FFlavorDropdownOpen then
+  begin
+    LMaxOffset := Max(0, FStatsContentHeight - Round(FStatsContentRect.Height));
+    if LMaxOffset > 0 then
+    begin
+      if WheelDelta < 0 then
+        FStatsScrollOffset := Min(LMaxOffset, FStatsScrollOffset + 20)
+      else
+        FStatsScrollOffset := Max(0, FStatsScrollOffset - 20);
+      Handled := True;
+      Redraw;
+    end;
+  end;
 end;
 
 end.

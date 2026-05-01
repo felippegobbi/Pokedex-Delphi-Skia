@@ -1,30 +1,30 @@
 ﻿[Closed Files]
-File_0=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas',0,1,197,72,224,0,0,,
-File_1=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.Main.pas',0,1,647,65,666,0,0,,
-File_2=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Service\Pokedex.Service.API.pas',0,1,29,47,47,0,0,,
-File_3=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Controller\Pokedex.Controller.Pokemon.pas',0,1,1,64,15,0,0,,
-File_4=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.TypeChart.pas',0,1,174,41,191,0,0,,
-File_5=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\source\rtl\common\System.Skia.pas',0,1,12209,45,12242,0,0,{{62,0}
-File_6=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\source\rtl\common\System.Rtti.pas',0,1,2676,34,2705,0,0,,
-File_7=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Model\Pokedex.Model.Pokemon.pas',0,1,42,92,42,0,0,,
-File_8=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Audio\Pokedex.Audio.Bass.pas',0,1,1,66,23,0,0,,
-File_9=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\SOURCE\VCL\Vcl.Controls.pas',0,1,6909,1,6929,0,0,,
-File_10=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\SOURCE\RTL\SYS\System.pas',0,1,19051,1,19071,0,0,,
-File_11=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.SearchEdit.pas',0,1,18,5,27,0,0,,
-File_12=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.Main.dfm',0,1,1,1,1,0,0,,
-File_13=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\source\rtl\common\System.Classes.pas',0,1,6924,1,6944,0,0,,
+File_0=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Service\Pokedex.Service.Storage.pas',0,1,1,21,31,0,0,,
+File_1=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.Main.pas',0,1,1,32,13,0,0,,
+File_2=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas',0,1,1,52,39,0,0,,
+File_3=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Service\Pokedex.Service.API.pas',0,1,29,47,47,0,0,,
+File_4=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Controller\Pokedex.Controller.Pokemon.pas',0,1,1,64,15,0,0,,
+File_5=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.TypeChart.pas',0,1,174,41,191,0,0,,
+File_6=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\source\rtl\common\System.Skia.pas',0,1,12209,45,12242,0,0,{{62,0}
+File_7=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\source\rtl\common\System.Rtti.pas',0,1,2676,34,2705,0,0,,
+File_8=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Model\Pokedex.Model.Pokemon.pas',0,1,42,92,42,0,0,,
+File_9=TSourceModule,'C:\Programação\Delphi\Pokedex\src\Audio\Pokedex.Audio.Bass.pas',0,1,1,66,23,0,0,,
+File_10=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\SOURCE\VCL\Vcl.Controls.pas',0,1,6909,1,6929,0,0,,
+File_11=TSourceModule,'c:\program files (x86)\embarcadero\studio\23.0\SOURCE\RTL\SYS\System.pas',0,1,19051,1,19071,0,0,,
+File_12=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.SearchEdit.pas',0,1,18,5,27,0,0,,
+File_13=TSourceModule,'C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.Main.dfm',0,1,1,1,1,0,0,,
 
 [Modules]
-Module0=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas
+Module0=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas
 Count=1
 EditWindowCount=1
 
-[C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas]
+[C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas]
 ModuleType=TSourceModule
 
 [EditWindow0]
 ViewCount=1
-CurrentEditView=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas
+CurrentEditView=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas
 View0=0
 PercentageSizes=1
 Create=1
@@ -53,7 +53,7 @@ RightPanelSize=1996
 RightPanelClients=DockSite2,DockSite4
 RightPanelData=00000800010100000000251000000000000001CC0700000000000001000000004912000009000000446F636B53697465320100000000B31C000009000000446F636B5369746534FFFFFFFF
 BottomPanelSize=1542
-BottomPanelClients=DockSite1,MessageView
+BottomPanelClients=MessageView,DockSite1
 BottomPanelData=0000080001020100000009000000446F636B536974653103450000000000000206060000000000000100000000034500000F0000004D65737361676556696577466F726DFFFFFFFF
 BottomMiddlePanelSize=0
 BottomMiddlePanelClients=DockSite0,GraphDrawingModel
@@ -61,14 +61,14 @@ BottomMiddelPanelData=0000080001020200000009000000446F636B5369746530100000004772
 
 [View0]
 CustomEditViewType=TEditView
-Module=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas
-CursorX=60
-CursorY=1013
-TopLine=985
-LeftCol=1
+Module=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas
+CursorX=93
+CursorY=921
+TopLine=897
+LeftCol=38
 Elisions=
 Bookmarks=
-EditViewName=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.StatsPanel.pas
+EditViewName=C:\Programação\Delphi\Pokedex\src\View\Pokedex.View.EvolutionPanel.pas
 
 [Watches]
 Count=0
@@ -109,8 +109,8 @@ Create=1
 Visible=1
 Docked=0
 State=2
-Left=2730
-Top=0
+Left=2398
+Top=2399
 Width=6699
 Height=6322
 MaxLeft=-4
@@ -618,7 +618,7 @@ Create=1
 Visible=0
 Docked=1
 State=0
-Left=0
+Left=1272
 Top=28
 Width=3824
 Height=1422
