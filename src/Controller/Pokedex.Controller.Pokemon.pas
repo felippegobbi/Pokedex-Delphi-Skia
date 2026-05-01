@@ -136,24 +136,8 @@ begin
 end;
 
 function TPokemonController.DownloadFile(const AUrl: string): TMemoryStream;
-var
-  LHttp: TNetHTTPClient;
 begin
-  Result := nil;
-  LHttp := TNetHTTPClient.Create(nil);
-  try
-    LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
-    LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
-    try
-      Result := TMemoryStream.Create;
-      LHttp.Get(AUrl, Result);
-      Result.Position := 0;
-    except
-      FreeAndNil(Result);
-    end;
-  finally
-    LHttp.Free;
-  end;
+  Result := FService.DownloadStream(AUrl);
 end;
 
 function TPokemonController.GetEvolutionChain(const AUrl: string)

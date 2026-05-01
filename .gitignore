@@ -28,3 +28,10 @@ Android/
 iOS/
 Debug/
 Release/
+
+# IDE e ambiente local
+.claude/
+.vscode/
+Pokedex.dsk
+Pokedex.dsv
+docs/

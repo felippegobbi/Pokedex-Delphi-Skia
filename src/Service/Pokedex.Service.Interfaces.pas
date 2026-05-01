@@ -3,7 +3,8 @@ unit Pokedex.Service.Interfaces;
 interface
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  System.Classes;
 
 type
   EPokemonError        = class(Exception);
@@ -18,6 +19,7 @@ type
     function GetEvolutionChainJSON(const AUrl: string): string;
     function GetTypeJSON(const AUrl: string): string;
     function GetEncountersJSON(const AIdOrName: string): string;
+    function DownloadStream(const AUrl: string): TMemoryStream;
   end;
 
 implementation

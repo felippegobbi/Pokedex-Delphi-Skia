@@ -35,6 +35,7 @@ type
     FArrowLeftRect: TRectF;
     FArrowRightRect: TRectF;
     FHoveredArrow: Integer; // 0=none, 1=left, 2=right
+    FIsDestroying: Boolean;
     procedure ComputePageIdxs;
     procedure DrawEvolution(ASender: TObject; const ACanvas: ISkCanvas;
       const ADest: TRectF; const AOpacity: Single);
@@ -97,6 +98,7 @@ end;
 
 destructor TEvolutionPanel.Destroy;
 begin
+  FIsDestroying := True;
   // Clear arrays
   SetLength(FFullNodes, 0);
   SetLength(FFullImages, 0);
@@ -260,6 +262,7 @@ begin
       TThread.Synchronize(TThread.CurrentThread, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if AGen <> FGeneration then
             Exit;
           if AIndex < Length(FFullImages) then

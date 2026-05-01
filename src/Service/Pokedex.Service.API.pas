@@ -20,6 +20,7 @@ type
     function GetEvolutionChainJSON(const AUrl: string): string;
     function GetTypeJSON(const AUrl: string): string;
     function GetEncountersJSON(const AIdOrName: string): string;
+    function DownloadStream(const AUrl: string): TMemoryStream;
   end;
 
 var
@@ -80,6 +81,27 @@ end;
 function TdmPokeService.GetEncountersJSON(const AIdOrName: string): string;
 begin
   Result := DoGet(POKEAPI_POKEMON + LowerCase(Trim(AIdOrName)) + '/encounters');
+end;
+
+function TdmPokeService.DownloadStream(const AUrl: string): TMemoryStream;
+var
+  LHttp: TNetHTTPClient;
+begin
+  Result := nil;
+  LHttp := TNetHTTPClient.Create(nil);
+  try
+    LHttp.ConnectionTimeout := HTTP_TIMEOUT_MS;
+    LHttp.ResponseTimeout := HTTP_TIMEOUT_MS;
+    try
+      Result := TMemoryStream.Create;
+      LHttp.Get(AUrl, Result);
+      Result.Position := 0;
+    except
+      FreeAndNil(Result);
+    end;
+  finally
+    LHttp.Free;
+  end;
 end;
 
 end.

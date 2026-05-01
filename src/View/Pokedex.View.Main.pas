@@ -156,6 +156,7 @@ type
     procedure FormChipsMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure UpdateFormChips(APokemon: TPokemon);
+    FIsDestroying: Boolean;
 
   const
     FONT_FAMILY = 'Montserrat';
@@ -222,6 +223,8 @@ end;
 
 procedure TPokedexView.FormDestroy(Sender: TObject);
 begin
+  FIsDestroying := True;
+
   // Audio cleanup
   if FCurrentChannel <> 0 then
   begin
@@ -653,6 +656,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if (FIsFavMode or FIsFilteredMode) and (FFilteredIdx >= 0) and
             (FFilteredIdx < Length(FFilteredList)) then
             LIsNavigating := (FFilteredList[FFilteredIdx] = LSearchTerm);
@@ -668,6 +672,7 @@ begin
             TThread.Synchronize(nil, TThreadProcedure(
               procedure
               begin
+                if FIsDestroying then Exit;
                 FFilteredList := LTypeList;
                 FFilteredIdx := 0;
                 FIsFilteredMode := True;
@@ -681,6 +686,7 @@ begin
             TThread.Synchronize(nil, TThreadProcedure(
               procedure
               begin
+                if FIsDestroying then Exit;
                 FIsFilteredMode := False;
                 FIsFavMode := False;
               end));
@@ -691,6 +697,7 @@ begin
           TThread.Synchronize(nil, TThreadProcedure(
             procedure
             begin
+              if FIsDestroying then Exit;
               FIsFilteredMode := False;
               FIsFavMode := False;
             end));
@@ -785,6 +792,12 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then
+          begin
+            FreeAndNil(LStream);
+            FreeAndNil(LPokemon);
+            Exit;
+          end;
           if LSearchRequestId <> FActiveSearchRequest then
           begin
             FreeAndNil(LStream);
@@ -1443,6 +1456,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if (LMovePoolRequestId <> FActiveMovePoolRequest) or
             (FStatsPanel.ActiveTab <> stMoves) then
             Exit;
@@ -1492,6 +1506,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if (LEncounterRequestId <> FActiveEncounterRequest) or
             (FStatsPanel.ActiveTab <> stLocations) then
             Exit;
@@ -1561,6 +1576,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if LFlavorRequestId <> FActiveFlavorRequest then
             Exit;
           if AIndex <= High(FCurrentFlavorTranslated) then
@@ -1596,6 +1612,7 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then Exit;
           if LAbilityRequestId <> FActiveAbilityRequest then
             Exit;
           FStatsPanel.LoadAbilityDescription(LDesc);
@@ -1884,6 +1901,11 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
+          if FIsDestroying then
+          begin
+            LStream.Free;
+            Exit;
+          end;
           if LGen <> FCryGeneration then
           begin
             LStream.Free;
@@ -2055,15 +2077,18 @@ begin
       LTotalW := LTotalW + CHIP_GAP;
     LTotalW := LTotalW + LChipWidths[I];
   end;
-  // Draw centered
-  LX := ADest.Left + (ADest.Width - LTotalW) / 2;
-  if LX < ADest.Left then
-    LX := ADest.Left;
+  // Draw with line wrapping
+  LX := ADest.Left + CHIP_GAP;
   for I := 0 to High(FCurrentVarietyLabels) do
   begin
-    if I > 0 then
-      LX := LX + CHIP_GAP;
     LChipW := LChipWidths[I];
+    // Check if chip fits on current line, otherwise wrap
+    if (LX + LChipW > ADest.Right - CHIP_GAP) and (LX > ADest.Left + CHIP_GAP) then
+    begin
+      LX := ADest.Left + CHIP_GAP;
+      LY := LY + CHIP_H + 4;
+    end;
+
     LIsActive := SameText(FCurrentVarietyApiNames[I], FCurrentPokemonName);
     LR := TRectF.Create(LX, LY, LX + LChipW, LY + LChipH);
     if I <= High(FFormChipRects) then
@@ -2111,7 +2136,7 @@ begin
     LP := LBuilder.Build;
     LP.Layout(LChipW);
     LP.Paint(ACanvas, LX + CHIP_PAD, LY + (LChipH - LP.Height) / 2);
-    LX := LX + LChipW;
+    LX := LX + LChipW + CHIP_GAP;
   end;
 end;
 
