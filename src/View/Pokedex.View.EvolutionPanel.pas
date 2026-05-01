@@ -49,6 +49,7 @@ type
       AColor: TAlphaColor; ABold: Boolean): ISkParagraph;
   public
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     procedure LoadChain(const ANodes: TArray<TEvolutionNode>);
     property ThemeColor: TAlphaColor read FThemeColor write FThemeColor;
     property FontFamily: string read FFontFamily write FFontFamily;
@@ -88,6 +89,17 @@ begin
   OnDraw := DrawEvolution;
   OnMouseDown := HandleMouseDown;
   Cursor := crHandPoint;
+end;
+
+destructor TEvolutionPanel.Destroy;
+begin
+  // Clear arrays
+  SetLength(FFullNodes, 0);
+  SetLength(FFullImages, 0);
+  SetLength(FFullStates, 0);
+  SetLength(FPageIdxs, 0);
+  SetLength(FNodeRects, 0);
+  inherited Destroy;
 end;
 
 procedure TEvolutionPanel.ComputePageIdxs;

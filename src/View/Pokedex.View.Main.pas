@@ -222,15 +222,30 @@ end;
 
 procedure TPokedexView.FormDestroy(Sender: TObject);
 begin
+  // Audio cleanup
   if FCurrentChannel <> 0 then
   begin
     BASS_ChannelStop(FCurrentChannel);
     BASS_StreamFree(FCurrentChannel);
   end;
   FreeAndNil(FCurrentStream);
-  if Assigned(FController) then
-    FController.Free;
   BASS_Free;
+
+  // Components cleanup
+  FreeAndNil(FLoadingTimer);
+  FreeAndNil(FStatsPanel);
+  FreeAndNil(FEvolutionPanel);
+
+  // Controller cleanup
+  FreeAndNil(FController);
+
+  // Clear image references
+  FCurrentSprite := nil;
+
+  // Clear arrays
+  SetLength(FFilteredList, 0);
+  SetLength(FCurrentFlavorTexts, 0);
+  SetLength(FCurrentFlavorTranslated, 0);
 end;
 
 procedure TPokedexView.SetupLayout;
