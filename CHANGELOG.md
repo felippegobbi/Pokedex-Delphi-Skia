@@ -18,6 +18,23 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 - `Sprint 1` → `feat(6.0.0): Sprint 1 - Abilities & Species Depth`
 - `Sprint 2` → `feat(6.1.0): Sprint 2 - Alternate Forms, BST Bar & Legendary Badge`
 
+## V7 Sprint Map / Mapa de Sprints V7
+
+- `Sprint 1` → `feat(7.0.0): Sprint 1 - Text-to-Speech (TTS)`
+
+## [7.0.0] - 2026-05-02
+
+### Added / Adicionado
+
+- **Text-to-Speech engine**: Pokémon name and flavor text can now be read aloud via Windows SAPI. A speaker icon appears in the stats tab next to the flavor version dropdown; clicking it toggles playback. A second click stops speech mid-sentence.
+- **Motor de síntese de fala**: O nome do Pokémon e o texto de flavor agora podem ser lidos em voz alta via Windows SAPI. Um ícone de alto-falante aparece na aba de stats ao lado do seletor de versão; clicar nele alterna a reprodução. Um segundo clique para a fala imediatamente.
+
+- **TTS icon with live speaking state**: The speaker icon in `StatsPanel` reflects real-time playback — lit in the Pokémon's type color while speaking, dimmed when idle.
+- **Ícone TTS com estado em tempo real**: O ícone de alto-falante no `StatsPanel` reflete o estado de reprodução em tempo real — iluminado na cor do tipo do Pokémon ao falar, escurecido quando ocioso.
+
+- **Thread-safe SAPI wrapper** (`Pokedex.Audio.TTS`): `ITTSEngine` interface backed by `TSapiTTSEngine`. Generation counter prevents stale done-callbacks after `Stop()`. Silent degradation when SAPI is unavailable on the system.
+- **Wrapper SAPI thread-safe** (`Pokedex.Audio.TTS`): Interface `ITTSEngine` implementada por `TSapiTTSEngine`. Contador de geração previne callbacks obsoletos após `Stop()`. Degradação silenciosa quando SAPI não está disponível no sistema.
+
 ## [6.1.0] - 2026-04-27
 
 ### Added / Adicionado

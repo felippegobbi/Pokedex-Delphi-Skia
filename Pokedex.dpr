@@ -11,7 +11,8 @@ uses
   Pokedex.View.EvolutionPanel in 'src\View\Pokedex.View.EvolutionPanel.pas',
   Pokedex.View.Main in 'src\View\Pokedex.View.Main.pas' {PokedexView},
   Pokedex.View.StatsPanel in 'src\View\Pokedex.View.StatsPanel.pas',
-  Pokedex.Audio.Bass in 'src\Audio\Pokedex.Audio.Bass.pas';
+  Pokedex.Audio.Bass in 'src\Audio\Pokedex.Audio.Bass.pas',
+  Pokedex.Audio.TTS in 'src\Audio\Pokedex.Audio.TTS.pas';
 
 {$R *.res}
 

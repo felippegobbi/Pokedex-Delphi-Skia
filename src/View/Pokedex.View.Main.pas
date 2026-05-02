@@ -25,7 +25,8 @@ uses
   Pokedex.View.EvolutionPanel,
   System.Types,
   System.Math,
-  Pokedex.Audio.Bass;
+  Pokedex.Audio.Bass,
+  Pokedex.Audio.TTS;
 
 type
   TPokedexView = class(TForm)
@@ -97,7 +98,9 @@ type
     FFormChipRects: TArray<TRectF>;
     FIsDestroying: Boolean;
     FActiveThreads: Integer;
+    FTTSEngine: ITTSEngine;
     procedure PlayCry;
+    procedure TTSBtnClick(Sender: TObject);
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
     procedure PerformSearch(const AIdOrName: string);
@@ -220,6 +223,7 @@ begin
   FLoadingTimer.Interval := 90;
   FLoadingTimer.OnTimer := LoadingTimerTick;
   BASS_Init(-1, 44100, 0, Handle, nil);
+  FTTSEngine := TSapiTTSEngine.Create;
   Randomize;
 end;
 
@@ -227,6 +231,8 @@ procedure TPokedexView.FormDestroy(Sender: TObject);
 var
   LTimeout: Cardinal;
 begin
+  if Assigned(FTTSEngine) then
+    FTTSEngine.Stop;
   FIsDestroying := True;
 
   // Drain background threads — must pump messages or TThread.Synchronize deadlocks
@@ -543,6 +549,7 @@ begin
   FStatsPanel.OnInteract := StatsPanelInteracted;
   FStatsPanel.OnMovesTabRequested := StatsPanelMovesTabRequested;
   FStatsPanel.OnLocationsTabRequested := StatsPanelLocationsTabRequested;
+  FStatsPanel.OnTTSRequested := TTSBtnClick;
   FStatsPanel.OnFlavorOptionSelected := StatsPanelFlavorOptionSelected;
   FStatsPanel.OnAbilitySelected := StatsPanelAbilitySelected;
 end;
@@ -679,6 +686,10 @@ begin
 
   FController.AddToHistory(AIdOrName);
   HideHistoryPanel;
+  if Assigned(FTTSEngine) then
+    FTTSEngine.Stop;
+  if Assigned(FStatsPanel) then
+    FStatsPanel.TTSSpeaking := False;
 
   InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
@@ -930,6 +941,8 @@ begin
 
             FShinyBtn.Visible := True;
             UpdateShinyIcon;
+            if Assigned(FStatsPanel) then
+              FStatsPanel.TTSSpeaking := False;
             if LShowShinyUnavailable then
               MessageDlg
                 ('Sprite shiny n'#227'o dispon'#237'vel para este Pok'#233'mon.',
@@ -1150,6 +1163,35 @@ procedure TPokedexView.CryIconClick(Sender: TObject);
 begin
   HideHistoryPanel;
   PlayCry;
+end;
+
+procedure TPokedexView.TTSBtnClick(Sender: TObject);
+var
+  LText: string;
+begin
+  if (FCurrentId = 0) or (not Assigned(FTTSEngine)) or
+    (not Assigned(FStatsPanel)) then
+    Exit;
+  if FTTSEngine.IsSpeaking then
+  begin
+    FTTSEngine.Stop;
+    FStatsPanel.TTSSpeaking := False;
+  end
+  else
+  begin
+    LText := FCurrentPokemonName;
+    if not FStatsPanel.Description.IsEmpty then
+      LText := LText + '. ' + FStatsPanel.Description;
+    FStatsPanel.TTSSpeaking := True;
+    FTTSEngine.Speak(LText,
+      procedure
+      begin
+        if not FIsDestroying and Assigned(FStatsPanel) then
+          FStatsPanel.TTSSpeaking := False;
+      end);
+    if not FTTSEngine.IsSpeaking then
+      FStatsPanel.TTSSpeaking := False;
+  end;
 end;
 
 procedure TPokedexView.RandomIconClick(Sender: TObject);

@@ -44,6 +44,8 @@ type
     FFlavorLabels: TArray<string>;
     FFlavorTexts: TArray<string>;
     FFlavorDropdownRect: TRectF;
+    FTTSIconRect: TRectF;
+    FTTSSpeaking: Boolean;
     FFlavorOptionRects: TArray<TRectF>;
     FFlavorDropdownOpen: Boolean;
     FFlavorScrollOffset: Integer;
@@ -82,6 +84,7 @@ type
     FOnMovesTabRequested: TNotifyEvent;
     FOnLocationsTabRequested: TNotifyEvent;
     FOnInteract: TNotifyEvent;
+    FOnTTSRequested: TNotifyEvent;
     FOnFlavorOptionSelected: TFlavorOptionSelectedEvent;
     FOnAbilitySelected: TAbilitySelectedEvent;
     procedure DrawStats(ASender: TObject; const ACanvas: ISkCanvas;
@@ -98,6 +101,7 @@ type
     procedure DrawTabs(const ACanvas: ISkCanvas; const APanelRect: TRectF);
     procedure DrawMoveTabs(const ACanvas: ISkCanvas; const APanelRect: TRectF);
     procedure DrawStatsTab(const ACanvas: ISkCanvas; const APanelRect: TRectF);
+    procedure DrawTTSIcon(const ACanvas: ISkCanvas; const ARect: TRectF);
     procedure DrawMovesTab(const ACanvas: ISkCanvas; const APanelRect: TRectF);
     procedure DrawLocationsTab(const ACanvas: ISkCanvas;
       const APanelRect: TRectF);
@@ -108,6 +112,7 @@ type
     function SplitLevelMove(const AMoveText: string; out ALevelLabel,
       AMoveName: string): Boolean;
     function GetAbilityUrl(AIndex: Integer): string;
+    procedure SetTTSSpeaking(const AValue: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
     procedure LoadStats(const AStats: TArray<TPokemonStat>);
@@ -141,11 +146,15 @@ type
     property OnLocationsTabRequested: TNotifyEvent read FOnLocationsTabRequested
       write FOnLocationsTabRequested;
     property OnInteract: TNotifyEvent read FOnInteract write FOnInteract;
+    property OnTTSRequested: TNotifyEvent read FOnTTSRequested
+      write FOnTTSRequested;
     property OnFlavorOptionSelected: TFlavorOptionSelectedEvent
       read FOnFlavorOptionSelected write FOnFlavorOptionSelected;
     property OnAbilitySelected: TAbilitySelectedEvent
       read FOnAbilitySelected write FOnAbilitySelected;
     property AbilityUrl[AIndex: Integer]: string read GetAbilityUrl;
+    property Description: string read FDescription;
+    property TTSSpeaking: Boolean read FTTSSpeaking write SetTTSSpeaking;
   end;
 
 implementation
@@ -186,6 +195,8 @@ begin
   SetLength(FFlavorTexts, 0);
   SetLength(FFlavorOptionRects, 0);
   FFlavorDropdownRect := TRectF.Empty;
+  FTTSIconRect := TRectF.Empty;
+  FTTSSpeaking := False;
   FFlavorDropdownOpen := False;
   FFlavorScrollOffset := 0;
   FSelectedFlavorIdx := -1;
@@ -257,6 +268,7 @@ begin
   SetLength(FFlavorTexts, 0);
   SetLength(FFlavorOptionRects, 0);
   FFlavorDropdownRect := TRectF.Empty;
+  FTTSIconRect := TRectF.Empty;
   FFlavorDropdownOpen := False;
   FFlavorScrollOffset := 0;
   FSelectedFlavorIdx := -1;
@@ -271,6 +283,7 @@ begin
   FFlavorTexts := ATexts;
   SetLength(FFlavorOptionRects, Length(ALabels));
   FFlavorDropdownRect := TRectF.Empty;
+  FTTSIconRect := TRectF.Empty;
   FFlavorDropdownOpen := False;
   FFlavorScrollOffset := 0;
   if Length(ATexts) > 0 then
@@ -289,6 +302,14 @@ end;
 procedure TStatsPanel.SetFlavorDescription(const AText: string);
 begin
   FDescription := AText;
+  Redraw;
+end;
+
+procedure TStatsPanel.SetTTSSpeaking(const AValue: Boolean);
+begin
+  if FTTSSpeaking = AValue then
+    Exit;
+  FTTSSpeaking := AValue;
   Redraw;
 end;
 
@@ -615,6 +636,51 @@ begin
   end;
 end;
 
+procedure TStatsPanel.DrawTTSIcon(const ACanvas: ISkCanvas;
+  const ARect: TRectF);
+var
+  LPaint: ISkPaint;
+  LColor: TAlphaColor;
+  LCX, LCY: Single;
+begin
+  LPaint := TSkPaint.Create;
+  LPaint.AntiAlias := True;
+  if FTTSSpeaking then
+    LColor := FBarColor
+  else
+    LColor := $88FFFFFF;
+
+  LCX := ARect.Left;
+  LCY := ARect.Top;
+
+  LPaint.Style := TSkPaintStyle.Fill;
+  LPaint.Color := LColor and $18FFFFFF;
+  ACanvas.DrawRoundRect(ARect, 4, 4, LPaint);
+
+  LPaint.Color := LColor;
+  ACanvas.DrawRoundRect(TRectF.Create(LCX + 3, LCY + 8, LCX + 7,
+    LCY + 14), 1.5, 1.5, LPaint);
+
+  LPaint.Style := TSkPaintStyle.Stroke;
+  LPaint.StrokeWidth := 2;
+  ACanvas.DrawLine(TPointF.Create(LCX + 7, LCY + 8),
+    TPointF.Create(LCX + 12, LCY + 5), LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX + 12, LCY + 5),
+    TPointF.Create(LCX + 12, LCY + 17), LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX + 12, LCY + 17),
+    TPointF.Create(LCX + 7, LCY + 14), LPaint);
+
+  LPaint.StrokeWidth := 1.6;
+  ACanvas.DrawLine(TPointF.Create(LCX + 15, LCY + 8),
+    TPointF.Create(LCX + 18, LCY + 6), LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX + 15, LCY + 14),
+    TPointF.Create(LCX + 18, LCY + 16), LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX + 17, LCY + 10),
+    TPointF.Create(LCX + 19, LCY + 12), LPaint);
+  ACanvas.DrawLine(TPointF.Create(LCX + 19, LCY + 12),
+    TPointF.Create(LCX + 17, LCY + 14), LPaint);
+end;
+
 procedure TStatsPanel.DrawStatsTab(const ACanvas: ISkCanvas;
   const APanelRect: TRectF);
 var
@@ -642,6 +708,7 @@ var
 begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
+  FTTSIconRect := TRectF.Empty;
   LCount := Length(FStats);
   if LCount = 0 then
     Exit;
@@ -972,6 +1039,10 @@ begin
       LP.Layout(12);
       LP.Paint(ACanvas, FFlavorDropdownRect.Right - 16,
         LBadgeMidY - LP.Height / 2);
+
+      FTTSIconRect := TRectF.Create(FFlavorDropdownRect.Right + 8, LY,
+        FFlavorDropdownRect.Right + 30, LY + 22);
+      DrawTTSIcon(ACanvas, FTTSIconRect);
       LY := LY + 26;
     end;
 
@@ -1717,6 +1788,14 @@ begin
           FOnAbilitySelected(Self, I);
         Exit;
       end;
+
+  if (FActiveTab = stStats) and (FTTSIconRect.Width > 0) and
+    (FTTSIconRect.Height > 0) and FTTSIconRect.Contains(LPoint) then
+  begin
+    if Assigned(FOnTTSRequested) then
+      FOnTTSRequested(Self);
+    Exit;
+  end;
 
   if (FActiveTab = stStats) and (Length(FFlavorLabels) > 1) then
   begin
