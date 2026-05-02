@@ -11,6 +11,7 @@ uses
   System.Net.HttpClient,
   System.Net.HttpClientComponent,
   Vcl.Controls,
+  Vcl.Forms,
   System.Skia,
   Vcl.Skia,
   System.Types,
@@ -262,7 +263,7 @@ begin
       TThread.Synchronize(TThread.CurrentThread, TThreadProcedure(
         procedure
         begin
-          if FIsDestroying then Exit;
+          if FIsDestroying or Application.Terminated then Exit;
           if AGen <> FGeneration then
             Exit;
           if AIndex < Length(FFullImages) then
@@ -272,7 +273,8 @@ begin
               FFullStates[AIndex] := eisLoaded
             else
               FFullStates[AIndex] := eisFailed;
-            Redraw;
+            if not FIsDestroying and not Application.Terminated then
+              Redraw;
           end;
         end));
     end).Start;

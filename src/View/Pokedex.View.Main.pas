@@ -1,4 +1,4 @@
-unit Pokedex.View.Main;
+﻿unit Pokedex.View.Main;
 
 interface
 
@@ -95,6 +95,8 @@ type
     FCurrentVarietyLabels: TArray<string>;
     FCurrentVarietyApiNames: TArray<string>;
     FFormChipRects: TArray<TRectF>;
+    FIsDestroying: Boolean;
+    FActiveThreads: Integer;
     procedure PlayCry;
     procedure CryIconClick(Sender: TObject);
     procedure ApplyTheme(const AColor: TColor);
@@ -105,6 +107,7 @@ type
     procedure CreateTypeBadge(const ATypeName: string);
     procedure PositionTypeContainer;
     procedure SetupLayout;
+    procedure RecalculateFormChipsHeight;
     procedure SetupSearchBar;
     procedure SetupHistoryOverlay;
     procedure HideHistoryPanel;
@@ -156,7 +159,6 @@ type
     procedure FormChipsMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure UpdateFormChips(APokemon: TPokemon);
-    FIsDestroying: Boolean;
 
   const
     FONT_FAMILY = 'Montserrat';
@@ -222,8 +224,18 @@ begin
 end;
 
 procedure TPokedexView.FormDestroy(Sender: TObject);
+var
+  LTimeout: Cardinal;
 begin
   FIsDestroying := True;
+
+  // Drain background threads — must pump messages or TThread.Synchronize deadlocks
+  LTimeout := GetTickCount + 5000;
+  while (FActiveThreads > 0) and (GetTickCount < LTimeout) do
+  begin
+    Application.ProcessMessages;
+    Sleep(10);
+  end;
 
   // Audio cleanup
   if FCurrentChannel <> 0 then
@@ -239,8 +251,9 @@ begin
   FreeAndNil(FStatsPanel);
   FreeAndNil(FEvolutionPanel);
 
-  // Controller cleanup
-  FreeAndNil(FController);
+  // Controller cleanup — verify it exists before freeing
+  if Assigned(FController) then
+    FreeAndNil(FController);
 
   // Clear image references
   FCurrentSprite := nil;
@@ -326,8 +339,8 @@ begin
 
   FFormChips := TSkPaintBox.Create(Self);
   FFormChips.Parent := pnlImage;
-  FFormChips.SetBounds(0, pnlImage.Height - FORMS_H - 4, pnlImage.Width, FORMS_H);
-  FFormChips.Anchors := [akLeft, akBottom, akRight];
+  FFormChips.SetBounds(0, 0, pnlImage.Width, FORMS_H);
+  FFormChips.Anchors := [];
   FFormChips.Cursor := crHandPoint;
   FFormChips.OnDraw := DrawFormChips;
   FFormChips.OnMouseDown := FormChipsMouseDown;
@@ -343,6 +356,63 @@ begin
 
   BorderIcons := BorderIcons - [biMaximize];
   CenterSprite;
+end;
+
+procedure TPokedexView.RecalculateFormChipsHeight;
+const
+  CHIP_H = 18;
+  CHIP_GAP = 6;
+  CHIP_PAD = 10;
+  CHIP_FONT_SIZE = 8.5;
+var
+  I, LRowCount: Integer;
+  LX, LChipW: Single;
+  LChipWidths: TArray<Single>;
+  LBuilder: ISkParagraphBuilder;
+  LParaStyle: ISkParagraphStyle;
+  LTextStyle: ISkTextStyle;
+  LP: ISkParagraph;
+begin
+  if (Length(FCurrentVarietyLabels) = 0) or (not Assigned(FFormChips)) then
+    Exit;
+
+  LParaStyle := TSkParagraphStyle.Create;
+  LParaStyle.MaxLines := 1;
+  LTextStyle := TSkTextStyle.Create;
+  LTextStyle.FontFamilies := [FFontName, 'Segoe UI'];
+  LTextStyle.FontSize := CHIP_FONT_SIZE;
+  LTextStyle.FontStyle := TSkFontStyle.Bold;
+
+  // Calculate chip widths
+  SetLength(LChipWidths, Length(FCurrentVarietyLabels));
+  for I := 0 to High(FCurrentVarietyLabels) do
+  begin
+    LTextStyle.Color := TAlphaColors.White;
+    LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+    LBuilder.PushStyle(LTextStyle);
+    LBuilder.AddText(FCurrentVarietyLabels[I]);
+    LBuilder.Pop;
+    LP := LBuilder.Build;
+    LP.Layout(300);
+    LChipWidths[I] := LP.LongestLine + CHIP_PAD * 2;
+  end;
+
+  // Calculate rows needed
+  LRowCount := 1;
+  LX := CHIP_GAP;
+  for I := 0 to High(LChipWidths) do
+  begin
+    LChipW := LChipWidths[I];
+    if (LX + LChipW > FFormChips.Width - CHIP_GAP) and (LX > CHIP_GAP) then
+    begin
+      Inc(LRowCount);
+      LX := CHIP_GAP;
+    end;
+    LX := LX + LChipW + CHIP_GAP;
+  end;
+
+  // Update height based on rows
+  FFormChips.Height := LRowCount * (CHIP_H + 4) + 2;
 end;
 
 procedure TPokedexView.SetupSearchBar;
@@ -454,9 +524,9 @@ begin
   FFavModeIcon.Hint := 'Ver Favoritos';
   FFavModeIcon.ShowHint := True;
   FFavModeIcon.Svg.Source :=
-    '<svg viewBox="0 0 24 24"><path fill="white" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 ' +
-    '4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38' +
-    '-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+    '<svg viewBox="0 0 24 24"><path fill="white" d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 '
+    + '4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38'
+    + '-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
   FFavModeIcon.OnClick := FavModeClick;
   FFavModeIcon.BringToFront;
 
@@ -610,6 +680,7 @@ begin
   FController.AddToHistory(AIdOrName);
   HideHistoryPanel;
 
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -628,6 +699,7 @@ begin
       LFlavorSelectedIdx: Integer;
       LFlavorNeedsTranslation: Boolean;
     begin
+      try
       LPokemon := nil;
       LStream := nil;
       LErrorMsg := '';
@@ -656,7 +728,8 @@ begin
       TThread.Synchronize(nil, TThreadProcedure(
         procedure
         begin
-          if FIsDestroying then Exit;
+          if FIsDestroying then
+            Exit;
           if (FIsFavMode or FIsFilteredMode) and (FFilteredIdx >= 0) and
             (FFilteredIdx < Length(FFilteredList)) then
             LIsNavigating := (FFilteredList[FFilteredIdx] = LSearchTerm);
@@ -672,7 +745,8 @@ begin
             TThread.Synchronize(nil, TThreadProcedure(
               procedure
               begin
-                if FIsDestroying then Exit;
+                if FIsDestroying then
+                  Exit;
                 FFilteredList := LTypeList;
                 FFilteredIdx := 0;
                 FIsFilteredMode := True;
@@ -686,7 +760,8 @@ begin
             TThread.Synchronize(nil, TThreadProcedure(
               procedure
               begin
-                if FIsDestroying then Exit;
+                if FIsDestroying then
+                  Exit;
                 FIsFilteredMode := False;
                 FIsFavMode := False;
               end));
@@ -697,7 +772,8 @@ begin
           TThread.Synchronize(nil, TThreadProcedure(
             procedure
             begin
-              if FIsDestroying then Exit;
+              if FIsDestroying then
+                Exit;
               FIsFilteredMode := False;
               FIsFavMode := False;
             end));
@@ -709,8 +785,8 @@ begin
         else
           LSpriteUrl := LPokemon.SpriteUrl;
         LStream := FController.DownloadFile(LSpriteUrl);
-        if LUseShiny and (LPokemon.ShinySpriteUrl.IsEmpty or not Assigned(LStream))
-        then
+        if LUseShiny and (LPokemon.ShinySpriteUrl.IsEmpty or
+          not Assigned(LStream)) then
         begin
           LShowShinyUnavailable := True;
           FreeAndNil(LStream);
@@ -737,10 +813,12 @@ begin
         if Length(LPokemon.Abilities) > 0 then
         begin
           LAbilityName := LPokemon.Abilities[0].Ability.Name;
-          LAbilityNote := TPokemonController.GetDefensiveAbilityNote(LAbilityName);
+          LAbilityNote := TPokemonController.GetDefensiveAbilityNote
+            (LAbilityName);
         end;
         if Length(LTypeNames) > 0 then
-          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames, LAbilityName);
+          LTypeEffects := FController.GetTypeEffectiveness(LTypeNames,
+            LAbilityName);
         if Assigned(LPokemon.SpeciesData) then
         begin
           LFlavorText := LPokemon.SpeciesData.GetDescription(LPokeAPILang);
@@ -758,14 +836,14 @@ begin
           for I := 0 to High(LPokemon.SpeciesData.FlavorEntries) do
             if Assigned(LPokemon.SpeciesData.FlavorEntries[I].Language) and
               SameText(LPokemon.SpeciesData.FlavorEntries[I].Language.Name,
-              LFlavorEntryLang) and
-              Assigned(LPokemon.SpeciesData.FlavorEntries[I].Version) then
+              LFlavorEntryLang) and Assigned(LPokemon.SpeciesData.FlavorEntries
+              [I].Version) then
             begin
               SetLength(LFlavorLabels, Length(LFlavorLabels) + 1);
               SetLength(LFlavorTexts, Length(LFlavorTexts) + 1);
               LFlavorLabels[High(LFlavorLabels)] :=
-                TPokemonController.CapitalizeDisplayName(
-                LPokemon.SpeciesData.FlavorEntries[I].Version.Name);
+                TPokemonController.CapitalizeDisplayName
+                (LPokemon.SpeciesData.FlavorEntries[I].Version.Name);
               LFlavorTexts[High(LFlavorTexts)] :=
                 LPokemon.SpeciesData.FlavorEntries[I].Text.Replace(#10, ' ')
                 .Replace(#12, ' ').Replace(#13, ' ');
@@ -778,7 +856,8 @@ begin
           LFlavorNeedsTranslation := (LSystemLang <> 'en') and
             SameText(LFlavorEntryLang, 'en');
           if LFlavorNeedsTranslation then
-            LFlavorText := TPokemonController.Translate(LFlavorText, LSystemLang);
+            LFlavorText := TPokemonController.Translate(LFlavorText,
+              LSystemLang);
         end;
       except
         on E: EPokemonNotFound do
@@ -852,7 +931,8 @@ begin
             FShinyBtn.Visible := True;
             UpdateShinyIcon;
             if LShowShinyUnavailable then
-              MessageDlg('Sprite shiny n'#227'o dispon'#237'vel para este Pok'#233'mon.',
+              MessageDlg
+                ('Sprite shiny n'#227'o dispon'#237'vel para este Pok'#233'mon.',
                 mtInformation, [mbOK], 0);
 
             if Assigned(LPokemon.SpeciesData) then
@@ -882,8 +962,8 @@ begin
                   [LPokemon.Id, FFilteredIdx + 1, Length(FFilteredList)])
               else
                 FIdLabel.Caption := Format('#%d  '#$00B7'  %s %d/%d',
-                  [LPokemon.Id, UpperCase(FFilterTerm),
-                  FFilteredIdx + 1, Length(FFilteredList)]);
+                  [LPokemon.Id, UpperCase(FFilterTerm), FFilteredIdx + 1,
+                  Length(FFilteredList)]);
             end
             else
               FIdLabel.Caption := Format('#%d', [LPokemon.Id]);
@@ -891,8 +971,8 @@ begin
             if FIdLabel.Words.Count > 0 then
             begin
               FIdLabel.Words[0].Font.Families := FFontName;
-              FIdLabel.Words[0].Font.Size :=
-                IfThen(FIsFilteredMode or FIsFavMode, 11, 16);
+              FIdLabel.Words[0].Font.Size := IfThen(FIsFilteredMode or
+                FIsFavMode, 11, 16);
               FIdLabel.Words[0].Font.Weight :=
                 TSkFontComponent.TSkFontWeight.Bold;
               FIdLabel.Words[0].FontColor := (FThemeTextColor and $00FFFFFF) or
@@ -916,13 +996,13 @@ begin
             UpdatePokemonTypes(LPokemon);
             if Length(LFlavorTexts) > 0 then
             begin
-              FCurrentFlavorTexts := Copy(LFlavorTexts, 0, Length(LFlavorTexts));
+              FCurrentFlavorTexts := Copy(LFlavorTexts, 0,
+                Length(LFlavorTexts));
               SetLength(FCurrentFlavorTranslated, Length(LFlavorTexts));
               FFlavorNeedsTranslation := LFlavorNeedsTranslation;
               FFlavorTargetLang := LSystemLang;
-              if (LFlavorSelectedIdx >= 0) and
-                (LFlavorSelectedIdx <= High(FCurrentFlavorTranslated)) and
-                not LFlavorText.IsEmpty then
+              if (LFlavorSelectedIdx >= 0) and (LFlavorSelectedIdx <=
+                High(FCurrentFlavorTranslated)) and not LFlavorText.IsEmpty then
                 FCurrentFlavorTranslated[LFlavorSelectedIdx] := LFlavorText;
               FStatsPanel.LoadFlavorOptions(LFlavorLabels, LFlavorTexts,
                 LFlavorText);
@@ -952,6 +1032,9 @@ begin
             FreeAndNil(LPokemon);
           end;
         end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
@@ -1141,8 +1224,8 @@ begin
     LSpinnerSize := ICON_SIZE;
     LSpinnerLeft := ADest.Right - (ICON_PAD + ICON_SIZE) * 2 +
       ((ICON_SIZE - LSpinnerSize) / 2) + 1;
-    LSpinnerRect := TRectF.Create(LSpinnerLeft,
-      ADest.CenterPoint.Y - (LSpinnerSize / 2), LSpinnerLeft + LSpinnerSize,
+    LSpinnerRect := TRectF.Create(LSpinnerLeft, ADest.CenterPoint.Y -
+      (LSpinnerSize / 2), LSpinnerLeft + LSpinnerSize,
       ADest.CenterPoint.Y + (LSpinnerSize / 2));
     ACanvas.DrawArc(LSpinnerRect, 0, 360, False, LPaint);
     LPaint.Color := POKEBALL_RED;
@@ -1350,13 +1433,14 @@ begin
 end;
 
 procedure TPokedexView.FormMouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+Shift: TShiftState; X, Y: Integer);
 begin
   // Fechar dropdown se clicou fora dele e da search bar
   if FIsHistoryVisible and Assigned(FHistoryPanel) then
   begin
-    if not FSearchContainer.ClientRect.Contains(FSearchContainer.ScreenToClient
-      (ClientToScreen(Point(X, Y)))) and not FHistoryPanel.ClientRect.Contains
+    if not FSearchContainer.ClientRect.Contains
+      (FSearchContainer.ScreenToClient(ClientToScreen(Point(X, Y)))) and
+      not FHistoryPanel.ClientRect.Contains
       (FHistoryPanel.ScreenToClient(ClientToScreen(Point(X, Y)))) then
       HideHistoryPanel;
   end;
@@ -1371,11 +1455,16 @@ const
   TYPE_H = 24;
   SHINY_H = 26;
   SHINY_W = 160;
+  CHIPS_GAP = 8;
 var
-  LAvailH, LTotalH, LGap, LY, LImgX, LNameY, LFavY: Integer;
+  LAvailH, LTotalH, LGap, LY, LImgX, LNameY, LFavY, LChipsBlockH: Integer;
 begin
   LAvailH := pnlImage.Height - pnlTopContainer.Height;
-  LTotalH := ID_H + NAME_BLOCK_H + TYPE_H + SPRITE_SIZE + SHINY_H;
+  if Assigned(FFormChips) and FFormChips.Visible then
+    LChipsBlockH := FFormChips.Height + CHIPS_GAP + TYPE_H
+  else
+    LChipsBlockH := TYPE_H;
+  LTotalH := ID_H + NAME_BLOCK_H + LChipsBlockH + SPRITE_SIZE + SHINY_H;
   LGap := Max(10, (LAvailH - LTotalH) div 5);
   LY := pnlTopContainer.Height + LGap;
   LImgX := (pnlImage.Width - SPRITE_SIZE) div 2;
@@ -1389,12 +1478,17 @@ begin
     FFavBtn.SetBounds((pnlImage.Width - 24) div 2, LFavY, 24, 24);
   btnPrev.SetBounds(20, LNameY + (NAME_H - btnPrev.Height) div 2, btnPrev.Width,
     btnPrev.Height);
-  btnNext.SetBounds(pnlImage.Width - btnNext.Width - 20, LNameY +
-    (NAME_H - btnNext.Height) div 2, btnNext.Width, btnNext.Height);
+  btnNext.SetBounds(pnlImage.Width - btnNext.Width - 20,
+    LNameY + (NAME_H - btnNext.Height) div 2, btnNext.Width, btnNext.Height);
   LY := LY + ID_H + NAME_BLOCK_H + LGap;
   fpTypes.Top := LY;
   fpTypes.Left := (pnlImage.Width - fpTypes.Width) div 2;
-  LY := LY + TYPE_H + LGap;
+  if Assigned(FFormChips) and FFormChips.Visible then
+  begin
+    FFormChips.SetBounds(0, LY + TYPE_H + CHIPS_GAP, pnlImage.Width,
+      FFormChips.Height);
+  end;
+  LY := LY + LChipsBlockH + LGap;
   if Assigned(FSpritePaintBox) then
     FSpritePaintBox.SetBounds(LImgX, LY, SPRITE_SIZE, SPRITE_SIZE);
   btnPrev.BringToFront;
@@ -1436,40 +1530,46 @@ begin
   LMovePoolRequestId := FActiveMovePoolRequest;
   FStatsPanel.SetMovesLoading(True);
 
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
       LSections: TArray<TMovePoolSection>;
       LErrorMsg: string;
     begin
-      SetLength(LSections, 0);
-      LErrorMsg := '';
       try
-        LSections := FController.GetMovePool(LPokemonId.ToString);
-      except
-        on E: EPokemonNetworkError do
-          LErrorMsg := MSG_NETWORK_ERROR;
-        on E: Exception do
-          LErrorMsg := E.Message;
-      end;
+        SetLength(LSections, 0);
+        LErrorMsg := '';
+        try
+          LSections := FController.GetMovePool(LPokemonId.ToString);
+        except
+          on E: EPokemonNetworkError do
+            LErrorMsg := MSG_NETWORK_ERROR;
+          on E: Exception do
+            LErrorMsg := E.Message;
+        end;
 
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if FIsDestroying then Exit;
-          if (LMovePoolRequestId <> FActiveMovePoolRequest) or
-            (FStatsPanel.ActiveTab <> stMoves) then
-            Exit;
-
-          if not LErrorMsg.IsEmpty then
+        TThread.Synchronize(nil, TThreadProcedure(
+          procedure
           begin
-            FStatsPanel.SetMovesLoading(False);
-            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
-            Exit;
-          end;
+            if FIsDestroying then
+              Exit;
+            if (LMovePoolRequestId <> FActiveMovePoolRequest) or
+              (FStatsPanel.ActiveTab <> stMoves) then
+              Exit;
 
-          FStatsPanel.LoadMovePool(LSections);
-        end));
+            if not LErrorMsg.IsEmpty then
+            begin
+              FStatsPanel.SetMovesLoading(False);
+              MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+              Exit;
+            end;
+
+            FStatsPanel.LoadMovePool(LSections);
+          end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
@@ -1486,45 +1586,51 @@ begin
   LEncounterRequestId := FActiveEncounterRequest;
   FStatsPanel.SetLocationsLoading(True);
 
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
       LSections: TArray<TEncounterSection>;
       LErrorMsg: string;
     begin
-      SetLength(LSections, 0);
-      LErrorMsg := '';
       try
-        LSections := FController.GetEncounters(LPokemonId.ToString);
-      except
-        on E: EPokemonNetworkError do
-          LErrorMsg := MSG_NETWORK_ERROR;
-        on E: Exception do
-          LErrorMsg := E.Message;
-      end;
+        SetLength(LSections, 0);
+        LErrorMsg := '';
+        try
+          LSections := FController.GetEncounters(LPokemonId.ToString);
+        except
+          on E: EPokemonNetworkError do
+            LErrorMsg := MSG_NETWORK_ERROR;
+          on E: Exception do
+            LErrorMsg := E.Message;
+        end;
 
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if FIsDestroying then Exit;
-          if (LEncounterRequestId <> FActiveEncounterRequest) or
-            (FStatsPanel.ActiveTab <> stLocations) then
-            Exit;
-
-          if not LErrorMsg.IsEmpty then
+        TThread.Synchronize(nil, TThreadProcedure(
+          procedure
           begin
-            FStatsPanel.SetLocationsLoading(False);
-            MessageDlg(LErrorMsg, mtError, [mbOK], 0);
-            Exit;
-          end;
+            if FIsDestroying then
+              Exit;
+            if (LEncounterRequestId <> FActiveEncounterRequest) or
+              (FStatsPanel.ActiveTab <> stLocations) then
+              Exit;
 
-          FStatsPanel.LoadLocations(LSections);
-        end));
+            if not LErrorMsg.IsEmpty then
+            begin
+              FStatsPanel.SetLocationsLoading(False);
+              MessageDlg(LErrorMsg, mtError, [mbOK], 0);
+              Exit;
+            end;
+
+            FStatsPanel.LoadLocations(LSections);
+          end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
 procedure TPokedexView.StatsPanelFlavorOptionSelected(Sender: TObject;
-  AIndex: Integer);
+AIndex: Integer);
 var
   LFlavorRequestId: Int64;
   LRawText: string;
@@ -1564,30 +1670,36 @@ begin
   LTargetLang := FFlavorTargetLang;
   FStatsPanel.SetFlavorDescription('Traduzindo...');
 
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
       LTranslatedText: string;
     begin
-      LTranslatedText := TPokemonController.Translate(LRawText, LTargetLang);
-      if LTranslatedText.IsEmpty then
-        LTranslatedText := LRawText;
+      try
+        LTranslatedText := TPokemonController.Translate(LRawText, LTargetLang);
+        if LTranslatedText.IsEmpty then
+          LTranslatedText := LRawText;
 
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if FIsDestroying then Exit;
-          if LFlavorRequestId <> FActiveFlavorRequest then
-            Exit;
-          if AIndex <= High(FCurrentFlavorTranslated) then
-            FCurrentFlavorTranslated[AIndex] := LTranslatedText;
-          FStatsPanel.SetFlavorDescription(LTranslatedText);
-        end));
+        TThread.Synchronize(nil, TThreadProcedure(
+          procedure
+          begin
+            if FIsDestroying then
+              Exit;
+            if LFlavorRequestId <> FActiveFlavorRequest then
+              Exit;
+            if AIndex <= High(FCurrentFlavorTranslated) then
+              FCurrentFlavorTranslated[AIndex] := LTranslatedText;
+            FStatsPanel.SetFlavorDescription(LTranslatedText);
+          end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
 procedure TPokedexView.StatsPanelAbilitySelected(Sender: TObject;
-  AIndex: Integer);
+AIndex: Integer);
 var
   LAbilityRequestId: Int64;
   LUrl, LPokeAPILang, LSystemLang: string;
@@ -1601,22 +1713,29 @@ begin
   if LUrl.IsEmpty then
     Exit;
   FStatsPanel.LoadAbilityDescription('Carregando...');
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
       LDesc: string;
     begin
-      LDesc := FController.GetAbilityDescriptionByUrl(LUrl, LPokeAPILang);
-      if (LPokeAPILang = 'en') and (LSystemLang <> 'en') and not LDesc.IsEmpty then
-        LDesc := TPokemonController.Translate(LDesc, LSystemLang);
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if FIsDestroying then Exit;
-          if LAbilityRequestId <> FActiveAbilityRequest then
-            Exit;
-          FStatsPanel.LoadAbilityDescription(LDesc);
-        end));
+      try
+        LDesc := FController.GetAbilityDescriptionByUrl(LUrl, LPokeAPILang);
+        if (LPokeAPILang = 'en') and (LSystemLang <> 'en') and not LDesc.IsEmpty
+        then
+          LDesc := TPokemonController.Translate(LDesc, LSystemLang);
+        TThread.Synchronize(nil, TThreadProcedure(
+          procedure
+          begin
+            if FIsDestroying then
+              Exit;
+            if LAbilityRequestId <> FActiveAbilityRequest then
+              Exit;
+            FStatsPanel.LoadAbilityDescription(LDesc);
+          end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
@@ -1683,8 +1802,8 @@ begin
   SetLength(LAbilityUrls, Length(APokemon.Abilities));
   for I := 0 to High(APokemon.Abilities) do
   begin
-    LAbilityNames[I] := TPokemonController.CapitalizeDisplayName(
-      APokemon.Abilities[I].Ability.Name);
+    LAbilityNames[I] := TPokemonController.CapitalizeDisplayName
+      (APokemon.Abilities[I].Ability.Name);
     LAbilityIsHidden[I] := APokemon.Abilities[I].IsHidden;
     LAbilityUrls[I] := APokemon.Abilities[I].Ability.Url;
   end;
@@ -1720,8 +1839,8 @@ begin
 
     for I := 0 to High(APokemon.SpeciesData.EggGroups) do
     begin
-      LEggGroupName := TPokemonController.CapitalizeDisplayName(
-        APokemon.SpeciesData.EggGroups[I].Name);
+      LEggGroupName := TPokemonController.CapitalizeDisplayName
+        (APokemon.SpeciesData.EggGroups[I].Name);
       if LEggGroups <> '' then
         LEggGroups := LEggGroups + ', ';
       LEggGroups := LEggGroups + LEggGroupName;
@@ -1735,12 +1854,12 @@ begin
       LHatchCounter := 'Indisponível';
 
     if Assigned(APokemon.SpeciesData.Generation) then
-      LGeneration := TPokemonController.FormatGeneration(
-        APokemon.SpeciesData.Generation.Name);
+      LGeneration := TPokemonController.FormatGeneration
+        (APokemon.SpeciesData.Generation.Name);
 
     if Assigned(APokemon.SpeciesData.Habitat) then
-      LHabitat := TPokemonController.CapitalizeDisplayName(
-        APokemon.SpeciesData.Habitat.Name);
+      LHabitat := TPokemonController.CapitalizeDisplayName
+        (APokemon.SpeciesData.Habitat.Name);
   end;
 
   for I := 0 to High(APokemon.PastTypes) do
@@ -1750,11 +1869,12 @@ begin
     begin
       if LPastTypeNames <> '' then
         LPastTypeNames := LPastTypeNames + '/';
-      LPastTypeNames := LPastTypeNames + TPokemonController.CapitalizeDisplayName(
-        APokemon.PastTypes[I].Types[J].&Type.Name);
+      LPastTypeNames := LPastTypeNames +
+        TPokemonController.CapitalizeDisplayName
+        (APokemon.PastTypes[I].Types[J].&Type.Name);
     end;
-    LPastEntry := TPokemonController.FormatGeneration(
-      APokemon.PastTypes[I].Generation.Name) + ': ' + LPastTypeNames;
+    LPastEntry := TPokemonController.FormatGeneration
+      (APokemon.PastTypes[I].Generation.Name) + ': ' + LPastTypeNames;
     if LPastTypes <> '' then
       LPastTypes := LPastTypes + '  ·  ';
     LPastTypes := LPastTypes + LPastEntry;
@@ -1892,33 +2012,38 @@ begin
   Inc(FCryGeneration);
   LGen := FCryGeneration;
   LCryId := FCurrentId;
+  InterlockedIncrement(FActiveThreads);
   TThread.CreateAnonymousThread(
     procedure
     var
       LStream: TMemoryStream;
     begin
-      LStream := FController.DownloadFile(TPokemonController.GetCryUrl(LCryId));
-      TThread.Synchronize(nil, TThreadProcedure(
-        procedure
-        begin
-          if FIsDestroying then
+      try
+        LStream := FController.DownloadFile(TPokemonController.GetCryUrl(LCryId));
+        TThread.Synchronize(nil, TThreadProcedure(
+          procedure
           begin
-            LStream.Free;
-            Exit;
-          end;
-          if LGen <> FCryGeneration then
-          begin
-            LStream.Free;
-            Exit;
-          end;
-          if not Assigned(LStream) then
-            Exit;
-          FCurrentStream := LStream;
-          FCurrentChannel := BASS_StreamCreateFile(True, FCurrentStream.Memory,
-            0, FCurrentStream.Size, 0);
-          if FCurrentChannel <> 0 then
-            BASS_ChannelPlay(FCurrentChannel, False);
-        end));
+            if FIsDestroying then
+            begin
+              LStream.Free;
+              Exit;
+            end;
+            if LGen <> FCryGeneration then
+            begin
+              LStream.Free;
+              Exit;
+            end;
+            if not Assigned(LStream) then
+              Exit;
+            FCurrentStream := LStream;
+            FCurrentChannel := BASS_StreamCreateFile(True, FCurrentStream.Memory,
+              0, FCurrentStream.Size, 0);
+            if FCurrentChannel <> 0 then
+              BASS_ChannelPlay(FCurrentChannel, False);
+          end));
+      finally
+        InterlockedDecrement(FActiveThreads);
+      end;
     end).Start;
 end;
 
@@ -1986,19 +2111,17 @@ procedure TPokedexView.UpdateFormChips(APokemon: TPokemon);
 var
   LBaseName, LLabel, LSuffix: string;
   I: Integer;
-  LHasMultiple: Boolean;
 begin
   if not Assigned(FFormChips) then
     Exit;
-  SetLength(FCurrentVarietyLabels, 0);
-  SetLength(FCurrentVarietyApiNames, 0);
-  LHasMultiple := Assigned(APokemon.SpeciesData) and
-    (Length(APokemon.SpeciesData.Varieties) > 1);
-  if not LHasMultiple then
+  if not Assigned(APokemon.SpeciesData) or
+    (Length(APokemon.SpeciesData.Varieties) = 0) then
   begin
     FFormChips.Visible := False;
     Exit;
   end;
+  SetLength(FCurrentVarietyLabels, 0);
+  SetLength(FCurrentVarietyApiNames, 0);
   // find base (default) name to strip as prefix for labels
   LBaseName := '';
   for I := 0 to High(APokemon.SpeciesData.Varieties) do
@@ -2012,7 +2135,8 @@ begin
   SetLength(FFormChipRects, Length(APokemon.SpeciesData.Varieties));
   for I := 0 to High(APokemon.SpeciesData.Varieties) do
   begin
-    FCurrentVarietyApiNames[I] := APokemon.SpeciesData.Varieties[I].Pokemon.Name;
+    FCurrentVarietyApiNames[I] := APokemon.SpeciesData.Varieties[I]
+      .Pokemon.Name;
     if APokemon.SpeciesData.Varieties[I].IsDefault then
       LLabel := 'Base'
     else
@@ -2025,20 +2149,22 @@ begin
     FCurrentVarietyLabels[I] := LLabel;
   end;
   FFormChips.Visible := True;
+  RecalculateFormChipsHeight;
+  CenterSprite;
   FFormChips.Redraw;
 end;
 
 procedure TPokedexView.DrawFormChips(ASender: TObject; const ACanvas: ISkCanvas;
-  const ADest: TRectF; const AOpacity: Single);
+const ADest: TRectF; const AOpacity: Single);
 var
   LPaint: ISkPaint;
   LParaStyle: ISkParagraphStyle;
   LTextStyle: ISkTextStyle;
   LBuilder: ISkParagraphBuilder;
   LP: ISkParagraph;
-  LChipW, LTotalW, LX, LChipH, LY: Single;
+  LChipW, LX, LChipH, LY, LLineW, LLineOffset, LAvailW: Single;
   LChipWidths: TArray<Single>;
-  I: Integer;
+  I, LStartIdx, LEndIdx: Integer;
   LIsActive: Boolean;
   LBgColor, LFgColor: TAlphaColor;
   LR: TRectF;
@@ -2053,7 +2179,8 @@ begin
   LPaint := TSkPaint.Create;
   LPaint.AntiAlias := True;
   LChipH := CHIP_H;
-  LY := ADest.Top + (ADest.Height - LChipH) / 2;
+  LY := ADest.Top + 2;
+  LAvailW := ADest.Width - CHIP_GAP * 2;
   LParaStyle := TSkParagraphStyle.Create;
   LParaStyle.MaxLines := 1;
   LTextStyle := TSkTextStyle.Create;
@@ -2062,7 +2189,6 @@ begin
   LTextStyle.FontStyle := TSkFontStyle.Bold;
   // Measure chip widths
   SetLength(LChipWidths, Length(FCurrentVarietyLabels));
-  LTotalW := 0;
   for I := 0 to High(FCurrentVarietyLabels) do
   begin
     LTextStyle.Color := TAlphaColors.White;
@@ -2073,75 +2199,91 @@ begin
     LP := LBuilder.Build;
     LP.Layout(300);
     LChipWidths[I] := LP.LongestLine + CHIP_PAD * 2;
-    if I > 0 then
-      LTotalW := LTotalW + CHIP_GAP;
-    LTotalW := LTotalW + LChipWidths[I];
   end;
-  // Draw with line wrapping
-  LX := ADest.Left + CHIP_GAP;
-  for I := 0 to High(FCurrentVarietyLabels) do
-  begin
-    LChipW := LChipWidths[I];
-    // Check if chip fits on current line, otherwise wrap
-    if (LX + LChipW > ADest.Right - CHIP_GAP) and (LX > ADest.Left + CHIP_GAP) then
+  // Calculate lines and draw centered
+  LStartIdx := 0;
+  repeat
+    LLineW := 0;
+    I := LStartIdx;
+    // Calculate line width
+    while I <= High(FCurrentVarietyLabels) do
     begin
-      LX := ADest.Left + CHIP_GAP;
-      LY := LY + CHIP_H + 4;
-    end;
-
-    LIsActive := SameText(FCurrentVarietyApiNames[I], FCurrentPokemonName);
-    LR := TRectF.Create(LX, LY, LX + LChipW, LY + LChipH);
-    if I <= High(FFormChipRects) then
-      FFormChipRects[I] := LR;
-
-    var LIsLightTheme: Boolean := FThemeTextColor <> TAlphaColors.White;
-    if LIsActive then
-    begin
-      LBgColor := FStatsPanel.BarColor and $40FFFFFF;
-      if LIsLightTheme then
-        LFgColor := DARK_PANEL_ALPHA
-      else
-        LFgColor := TAlphaColors.White;
-    end
-    else
-    begin
-      if LIsLightTheme then
+      LChipW := LChipWidths[I];
+      if LLineW > 0 then
       begin
-        LBgColor := $20000000;
-        LFgColor := $AA000000;
+        if LLineW + CHIP_GAP + LChipW > LAvailW then
+          Break;
+        LLineW := LLineW + CHIP_GAP + LChipW;
+      end
+      else
+        LLineW := LChipW;
+      Inc(I);
+    end;
+    // Draw line centered
+    LEndIdx := I - 1;
+    LLineOffset := (LAvailW - LLineW) / 2;
+    LX := ADest.Left + CHIP_GAP + LLineOffset;
+    for I := LStartIdx to LEndIdx do
+    begin
+      LChipW := LChipWidths[I];
+      LIsActive := SameText(FCurrentVarietyApiNames[I], FCurrentPokemonName);
+      LR := TRectF.Create(LX, LY, LX + LChipW, LY + LChipH);
+      if I <= High(FFormChipRects) then
+        FFormChipRects[I] := LR;
+
+      var
+        LIsLightTheme: Boolean := FThemeTextColor <> TAlphaColors.White;
+      if LIsActive then
+      begin
+        LBgColor := FStatsPanel.BarColor and $40FFFFFF;
+        if LIsLightTheme then
+          LFgColor := DARK_PANEL_ALPHA
+        else
+          LFgColor := TAlphaColors.White;
       end
       else
       begin
-        LBgColor := $18FFFFFF;
-        LFgColor := $AAFFFFFF;
+        if LIsLightTheme then
+        begin
+          LBgColor := $20000000;
+          LFgColor := $AA000000;
+        end
+        else
+        begin
+          LBgColor := $18FFFFFF;
+          LFgColor := $AAFFFFFF;
+        end;
       end;
+      LPaint.Style := TSkPaintStyle.Fill;
+      LPaint.Color := LBgColor;
+      ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
+      LPaint.Style := TSkPaintStyle.Stroke;
+      LPaint.StrokeWidth := 1;
+      if LIsActive then
+        LPaint.Color := FStatsPanel.BarColor
+      else if LIsLightTheme then
+        LPaint.Color := $33000000
+      else
+        LPaint.Color := $33FFFFFF;
+      ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
+      LTextStyle.Color := LFgColor;
+      LBuilder := TSkParagraphBuilder.Create(LParaStyle);
+      LBuilder.PushStyle(LTextStyle);
+      LBuilder.AddText(FCurrentVarietyLabels[I]);
+      LBuilder.Pop;
+      LP := LBuilder.Build;
+      LP.Layout(LChipW);
+      LP.Paint(ACanvas, LX + CHIP_PAD, LY + (LChipH - LP.Height) / 2);
+      LX := LX + LChipW + CHIP_GAP;
     end;
-    LPaint.Style := TSkPaintStyle.Fill;
-    LPaint.Color := LBgColor;
-    ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
-    LPaint.Style := TSkPaintStyle.Stroke;
-    LPaint.StrokeWidth := 1;
-    if LIsActive then
-      LPaint.Color := FStatsPanel.BarColor
-    else if LIsLightTheme then
-      LPaint.Color := $33000000
-    else
-      LPaint.Color := $33FFFFFF;
-    ACanvas.DrawRoundRect(LR, 5, 5, LPaint);
-    LTextStyle.Color := LFgColor;
-    LBuilder := TSkParagraphBuilder.Create(LParaStyle);
-    LBuilder.PushStyle(LTextStyle);
-    LBuilder.AddText(FCurrentVarietyLabels[I]);
-    LBuilder.Pop;
-    LP := LBuilder.Build;
-    LP.Layout(LChipW);
-    LP.Paint(ACanvas, LX + CHIP_PAD, LY + (LChipH - LP.Height) / 2);
-    LX := LX + LChipW + CHIP_GAP;
-  end;
+    LStartIdx := LEndIdx + 1;
+    if LStartIdx <= High(FCurrentVarietyLabels) then
+      LY := LY + CHIP_H + 4;
+  until LStartIdx > High(FCurrentVarietyLabels);
 end;
 
 procedure TPokedexView.FormChipsMouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+Shift: TShiftState; X, Y: Integer);
 var
   I: Integer;
   LPoint: TPointF;

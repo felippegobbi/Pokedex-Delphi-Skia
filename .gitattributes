@@ -1,0 +1,5 @@
+# Delphi binary resources — never touch line endings
+*.res binary
+*.ico binary
+*.bmp binary
+*.png binary
